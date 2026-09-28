@@ -58,6 +58,9 @@ export function LiveShellRow({ item, theme }: PluginTimelineItemProps<LiveShellD
         contentContainerStyle={DETAIL_CONTENT_STYLE}
       >
         <View>
+          <Text style={styles.text} selectable>
+            {data.command}
+          </Text>
           {data.errorText ? <Text style={styles.error}>{data.errorText}</Text> : null}
           <Text style={styles.text} selectable>
             {data.output === "" ? (running ? "Waiting for output…" : "(no output)") : data.output}
