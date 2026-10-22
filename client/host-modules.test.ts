@@ -23,8 +23,10 @@ const ALLOWED_HOST_MODULES = new Set([
   "zod",
 ]);
 
+const SOURCE_FILE = /\.(?:tsx?|jsx?|mjs|cjs)$/;
+
 function isTestFile(path: string): boolean {
-  return /\.test\.tsx?$/.test(path);
+  return /\.test\.(?:tsx?|jsx?|mjs|cjs)$/.test(path);
 }
 
 function sourceFiles(directory: string): string[] {
@@ -32,19 +34,34 @@ function sourceFiles(directory: string): string[] {
     if (entry === "node_modules" || entry.startsWith(".")) return [];
     const path = join(directory, entry);
     if (statSync(path).isDirectory()) return sourceFiles(path);
-    if (!/\.tsx?$/.test(path) || isTestFile(path)) return [];
+    if (!SOURCE_FILE.test(path) || isTestFile(path)) return [];
     return [path];
   });
 }
 
+/**
+ * Every way a module can be referenced from source: static and re-exported
+ * imports, side-effect imports, dynamic imports, and `require`.
+ */
+const SPECIFIER_PATTERNS = [
+  /\bfrom\s+"([^"]+)"/g,
+  /\bimport\s+"([^"]+)"/g,
+  /\bimport\s*\(\s*"([^"]+)"\s*\)/g,
+  /\brequire\s*\(\s*"([^"]+)"\s*\)/g,
+];
+
+function importedSpecifiers(source: string): string[] {
+  return SPECIFIER_PATTERNS.flatMap((pattern) =>
+    [...source.matchAll(pattern)].map((match) => match[1] ?? ""),
+  ).filter((specifier) => specifier !== "");
+}
 describe("host module imports", () => {
   it("imports only modules Paseo provides to plugins", () => {
     const violations: string[] = [];
 
     for (const path of sourceFiles(root)) {
       const source = readFileSync(path, "utf8");
-      for (const match of source.matchAll(/from\s+"([^"]+)"/g)) {
-        const specifier = match[1];
+      for (const specifier of importedSpecifiers(source)) {
         if (specifier.startsWith(".")) continue;
         if (ALLOWED_HOST_MODULES.has(specifier)) continue;
         violations.push(`${relative(root, path)} imports ${specifier}`);

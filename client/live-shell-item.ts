@@ -2,6 +2,50 @@ import { LIVE_SHELL_KIND, LIVE_SHELL_VERSION, liveShellDataSchema } from "../sha
 
 const KNOWN_STATUSES = new Set(["running", "completed", "failed", "canceled"]);
 
+/**
+ * Output kept in the timeline item. Providers truncate themselves (pi keeps
+ * 2000 lines / 50 KB), but not all of them do, and the whole output is
+ * serialized on every streaming update, so the transformer clamps it here.
+ */
+const MAX_OUTPUT_CHARS = 50 * 1024;
+const MAX_OUTPUT_LINES = 2_000;
+
+/** Paseo's native shell detail drops the blank line providers often prepend. */
+function trimLeadingNewlines(text: string): string {
+  return text.replace(/^\n+/, "");
+}
+
+function trimTrailingNewlines(text: string): string {
+  return text.replace(/\n+$/, "");
+}
+
+/**
+ * Keeps the tail of a long output. Counting runs backwards on purpose: an output
+ * from a provider that does not truncate can be megabytes, and splitting it into
+ * an array to count lines would allocate all of it first.
+ */
+export function keepOutputTail(text: string): { output: string; truncated: boolean } {
+  let output = text;
+  let truncated = false;
+
+  if (output.length > MAX_OUTPUT_CHARS) {
+    output = output.slice(output.length - MAX_OUTPUT_CHARS);
+    // The first line is almost certainly cut in half; drop it.
+    const firstBreak = output.indexOf("\n");
+    if (firstBreak !== -1) output = output.slice(firstBreak + 1);
+    truncated = true;
+  }
+
+  let lines = 1;
+  for (let index = output.length - 1; index >= 0; index -= 1) {
+    if (output.charCodeAt(index) !== 10) continue;
+    lines += 1;
+    if (lines > MAX_OUTPUT_LINES) return { output: output.slice(index + 1), truncated: true };
+  }
+
+  return { output, truncated };
+}
+
 interface ShellToolCallSnapshot {
   command: string;
   output: string;
@@ -57,8 +101,8 @@ export function readShellToolCall(item: unknown): ShellToolCallSnapshot | undefi
   const exitCode = detail.exitCode;
 
   return {
-    command: asString(detail.command) ?? "",
-    output: asString(detail.output) ?? "",
+    command: trimTrailingNewlines(asString(detail.command) ?? ""),
+    output: trimLeadingNewlines(asString(detail.output) ?? ""),
     status: readStatus(record.status),
     exitCode: typeof exitCode === "number" ? exitCode : exitCode === null ? null : undefined,
     errorText: describeError(record.error),
@@ -78,14 +122,16 @@ export function liveShellTimelineItem(item: unknown) {
   const parsed = liveShellDataSchema.safeParse(snapshot);
   if (!parsed.success) return undefined;
 
-  const data: Record<string, string | number | null> = {
+  const { output, truncated } = keepOutputTail(parsed.data.output);
+
+  const data: Record<string, string | number | boolean | null> = {
     command: parsed.data.command,
-    output: parsed.data.output,
+    output,
     status: parsed.data.status,
   };
   if (parsed.data.exitCode !== undefined) data.exitCode = parsed.data.exitCode;
   if (parsed.data.errorText !== undefined) data.errorText = parsed.data.errorText;
-
+  if (truncated) data.truncated = true;
   return {
     items: [
       {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { liveShellDataSchema } from "../shared/live-shell";
-import { liveShellTimelineItem, readShellToolCall } from "./live-shell-item";
+import { keepOutputTail, liveShellTimelineItem, readShellToolCall } from "./live-shell-item";
 
 function shellItem(overrides: Record<string, unknown> = {}) {
   return {
@@ -46,12 +46,40 @@ describe("readShellToolCall", () => {
     expect(second?.output).toBe("building...\nstep 1\nstep 2\n");
   });
 
-  it("keeps long output in full, without truncating it", () => {
+  it("keeps the output as reported, without truncating it on read", () => {
     const long = `${"line\n".repeat(20_000)}tail-marker`;
     const snapshot = readShellToolCall(
       shellItem({ detail: { type: "shell", command: "cat big.log", output: long } }),
     );
     expect(snapshot?.output).toBe(long);
+  });
+
+  it("drops the blank lines providers add around command and output", () => {
+    const snapshot = readShellToolCall(
+      shellItem({
+        detail: { type: "shell", command: "npm run build\n\n", output: "\n\nbuilding...\n" },
+      }),
+    );
+    expect(snapshot?.command).toBe("npm run build");
+    expect(snapshot?.output).toBe("building...\n");
+  });
+
+  it("clamps a huge output to its tail", () => {
+    const lines = Array.from({ length: 5_000 }, (_, index) => `line ${index}`);
+    const { output, truncated } = keepOutputTail(lines.join("\n"));
+    expect(truncated).toBe(true);
+    expect(output.split("\n")).toHaveLength(2_000);
+    expect(output.endsWith("line 4999")).toBe(true);
+  });
+
+  it("drops the half line left by a byte clamp", () => {
+    const { output, truncated } = keepOutputTail(`${"x".repeat(60_000)}\ncomplete tail`);
+    expect(truncated).toBe(true);
+    expect(output).toBe("complete tail");
+  });
+
+  it("leaves a short output alone", () => {
+    expect(keepOutputTail("building...\n")).toEqual({ output: "building...\n", truncated: false });
   });
 
   it("ignores non-shell tool calls so Paseo keeps its own row", () => {
@@ -97,7 +125,7 @@ describe("liveShellTimelineItem", () => {
     const entry = result?.items[0];
     expect(entry?.type).toBe("plugin");
     expect(entry?.kind).toBe("live-shell");
-    expect(entry?.version).toBe(3);
+    expect(entry?.version).toBe(4);
 
     const roundTripped = JSON.parse(JSON.stringify(entry?.data));
     expect(liveShellDataSchema.safeParse(roundTripped).success).toBe(true);
@@ -110,6 +138,18 @@ describe("liveShellTimelineItem", () => {
     const data = result?.items[0]?.data as Record<string, unknown>;
     expect(Object.hasOwn(data, "exitCode")).toBe(false);
     expect(Object.hasOwn(data, "errorText")).toBe(false);
+    expect(Object.hasOwn(data, "truncated")).toBe(false);
+  });
+
+  it("flags a clamped output and stays valid after JSON round-trip", () => {
+    const long = Array.from({ length: 5_000 }, (_, index) => `line ${index}`).join("\n");
+    const result = liveShellTimelineItem(
+      shellItem({ detail: { type: "shell", command: "cat big.log", output: long } }),
+    );
+    const roundTripped = JSON.parse(JSON.stringify(result?.items[0]?.data));
+    expect(liveShellDataSchema.safeParse(roundTripped).success).toBe(true);
+    expect(roundTripped.truncated).toBe(true);
+    expect(roundTripped.output.split("\n").length).toBe(2_000);
   });
 
   it("returns undefined for anything that is not a shell call", () => {

@@ -43,7 +43,11 @@ interface ThinkingLineOptions {
  */
 export function liveThinkingLine(text: string, options: ThinkingLineOptions = {}): string {
   const { end = "end", max = SUMMARY_CHARS } = options;
-  const compact = text.replace(/\s+/g, " ").trim();
+  // While streaming, only the newest end is shown, so a huge accumulated thought
+  // does not have to be copied (and regex-scanned) on every chunk.
+  const window = max * 8;
+  const source = end === "end" && text.length > window ? text.slice(text.length - window) : text;
+  const compact = source.replace(/\s+/g, " ").trim();
   if (compact.length <= max) return compact;
   return end === "start" ? compact.slice(0, max) : compact.slice(compact.length - max);
 }

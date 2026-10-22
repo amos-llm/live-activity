@@ -30,6 +30,17 @@ describe("liveThinkingLine", () => {
       "START aaaa",
     );
   });
+
+  it("only reads the newest window of a very long thought", () => {
+    const text = `${"start ".repeat(20_000)}THE NEWEST`;
+    const line = liveThinkingLine(text, { max: 12 });
+    expect(line).toHaveLength(12);
+    expect(line.endsWith("THE NEWEST")).toBe(true);
+  });
+
+  it("still collapses runs of whitespace larger than the window", () => {
+    expect(liveThinkingLine(`${" ".repeat(5_000)}tail`, { max: 10 })).toBe("tail");
+  });
 });
 
 describe("liveThinkingTimelineItem", () => {

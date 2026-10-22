@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 /**
  * Row-local expansion state. The row follows `autoOpen` until the user taps it,
@@ -7,5 +7,7 @@ import { useState } from "react";
 export function useToggle(autoOpen: boolean) {
   const [override, setOverride] = useState<boolean | null>(null);
   const expanded = override ?? autoOpen;
-  return { expanded, toggle: () => setOverride(!expanded) };
+  // Functional update keeps the callback stable across streaming re-renders.
+  const toggle = useCallback(() => setOverride((previous) => !(previous ?? autoOpen)), [autoOpen]);
+  return { expanded, toggle };
 }
