@@ -1,10 +1,11 @@
 import type { PluginTimelineItemProps } from "@getpaseo/plugin/client";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { ScrollView, Text } from "react-native";
 import type { LiveThinkingData } from "../shared/live-thinking";
 import { liveThinkingLine } from "./live-thinking-item";
 import { CODE_LINE_STYLE, TimelineBadge, UI_FONT } from "./timeline-badge";
 import { useAutoCollapse } from "./use-auto-collapse";
+import { usePinnedScroll } from "./use-pinned-scroll";
 import { useToggle } from "./use-toggle";
 
 /** Native detail blocks cap their scroll area at 400px; a compact layout gets less. */
@@ -17,7 +18,8 @@ const SUMMARY_CHARS_COMPACT = 120;
 /**
  * Thinking row: expands while the thought streams so the reasoning is readable
  * as it arrives, and folds back to a single line a few seconds after it ends.
- * Expanded, the detail block is pinned to the newest text; collapsed, the header
+ * Expanded, the detail block follows the newest text while the reader is at the
+ * bottom, and stops moving the moment they scroll up; collapsed, the header
  * keeps the start of the thought, which is what identifies it.
  */
 export function LiveThinkingRow({
@@ -27,7 +29,7 @@ export function LiveThinkingRow({
 }: PluginTimelineItemProps<LiveThinkingData>) {
   const data = item.data;
   const { expanded, toggle } = useToggle(useAutoCollapse(data.streaming));
-  const scrollRef = useRef<ScrollView>(null);
+  const { ref: scrollRef, follow, reset, onScroll } = usePinnedScroll();
 
   const styles = useMemo(
     () => ({
@@ -57,24 +59,24 @@ export function LiveThinkingRow({
         contentContainerStyle={CODE_LINE_STYLE}
         nestedScrollEnabled
         showsVerticalScrollIndicator
+        scrollEventThrottle={16}
+        onScroll={onScroll}
+        onContentSizeChange={follow}
       >
         <Text style={styles.text} selectable>
           {data.text}
         </Text>
       </ScrollView>
     ),
-    [styles, data.text],
+    [styles, data.text, onScroll, follow, scrollRef],
   );
 
-  // While the thought streams, keep the expanded view pinned to the newest
-  // text so the tail of the reasoning is always visible.
-  const lastText = useRef("");
+  // The detail block only follows the stream while the reader is at the bottom.
+  // `follow` (onContentSizeChange above) checks that before scrolling, so a
+  // reader who scrolled up keeps their position; reopening the row re-arms it.
   useEffect(() => {
-    if (expanded && data.streaming && lastText.current !== data.text) {
-      lastText.current = data.text;
-      scrollRef.current?.scrollToEnd({ animated: false });
-    }
-  }, [data.text, data.streaming, expanded]);
+    if (expanded) reset();
+  }, [expanded, reset]);
 
   return (
     <TimelineBadge
