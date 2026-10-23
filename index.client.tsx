@@ -1,6 +1,7 @@
 import type { PluginButtonContentProps, PluginButtonRegistration, PluginClientContext, PluginWorkspacePanelProps } from "@getpaseo/plugin/client";
 import { useCallback, useState } from "react";
 import { BgTaskDetailBody } from "./client/bg-task-detail";
+import { pillLabel } from "./client/bg-task-format";
 import { BgTasksPopover } from "./client/bg-tasks-popover";
 import { liveShellTimelineItem } from "./client/live-shell-item";
 import { LiveShellRow } from "./client/live-shell-row";
@@ -16,8 +17,8 @@ import {
 
 const BG_TASKS_PILL_ID = "bg-tasks";
 const BG_TASK_PANEL_PREFIX = "bg-task-"; // contribution ids must match /^[a-z][a-z0-9-]*$/ (no ':')
-/** How often a not-yet-revealed session asks "has my first task started?". */
-const PILL_DISCOVERY_INTERVAL_MS = 5000;
+/** How often a session re-reads its task list to reconcile pill + count. */
+const PILL_POLL_INTERVAL_MS = 5000;
 
 /**
  * The pi session whose tasks a pill shows: the agent's working directory plus
@@ -50,8 +51,9 @@ function sessionTarget(agent: PillAgent): BgSessionTarget | null {
 
 /**
  * Registers a "Bg tasks" composer pill (input-box row, alongside Tasks /
- * Subagents) for every agent. The pill opens a popover listing the pi
- * background tasks, with log tails and a SIGTERM action.
+ * Subagents) for every agent. The label carries the number of **running**
+ * tasks, and the pill opens a popover listing the pi background tasks, with log
+ * tails and a SIGTERM action.
  * Returns the entry's cleanup function.
  */
 /**
@@ -114,9 +116,11 @@ function contributeBgTasksPills(client: PluginClientContext): () => void {
     registration: PluginButtonRegistration | null;
     workspaceId: string;
     target: BgSessionTarget | null;
-    /** Discovery ticker; runs only while `registration` is null. */
+    /** Label ticker; keeps the pill's running-task count current. */
     timer: ReturnType<typeof setInterval> | null;
     probeInFlight: boolean;
+    /** Running-task count last painted on the pill; null when not yet read. */
+    running: number | null;
   };
   const pills = new Map<string, PillState>();
   const lifetime = new AbortController();
@@ -125,7 +129,7 @@ function contributeBgTasksPills(client: PluginClientContext): () => void {
   const sameTarget = (a: BgSessionTarget | null, b: BgSessionTarget | null) =>
     a === b || (a !== null && b !== null && a.cwd === b.cwd && a.sessionId === b.sessionId);
 
-  const stopDiscovery = (state: PillState) => {
+  const stopPolling = (state: PillState) => {
     if (state.timer === null) return;
     clearInterval(state.timer);
     state.timer = null;
@@ -134,7 +138,7 @@ function contributeBgTasksPills(client: PluginClientContext): () => void {
   const dropPill = (agentId: string) => {
     const state = pills.get(agentId);
     if (!state) return;
-    stopDiscovery(state);
+    stopPolling(state);
     state.registration?.remove();
     pills.delete(agentId);
   };
@@ -142,7 +146,6 @@ function contributeBgTasksPills(client: PluginClientContext): () => void {
   /** Adds the composer pill for an agent. Idempotent: one pill per agent. */
   const addPill = (agentId: string, state: PillState) => {
     if (state.registration) return;
-    stopDiscovery(state);
     const workspaceId = state.workspaceId;
     state.registration = client.addComposerPill({
       id: BG_TASKS_PILL_ID,
@@ -151,7 +154,7 @@ function contributeBgTasksPills(client: PluginClientContext): () => void {
       button: {
         title: "Background tasks",
         icon: "ListTodo",
-        label: "Bg tasks",
+        label: pillLabel(state.running ?? 0),
         visible: true,
         behavior: {
           kind: "popover",
@@ -162,50 +165,64 @@ function contributeBgTasksPills(client: PluginClientContext): () => void {
   };
 
   /**
-   * Creates the pill on the session's **first** background task and then leaves
-   * it alone for good: a session that has never run one keeps the composer row
-   * free, and once the pill exists it never disappears again — not when the
-   * task ends, not when the run dir is cleaned up.
+   * Reconciles one session's pill with its task list: creates the pill on the
+   * **first** background task ever seen, then keeps the label's running count
+   * current. A session that has never run a task keeps the composer row free;
+   * once the pill exists it never disappears again — not when the task ends,
+   * not when the run dir is cleaned up.
    *
    * The trigger has to be polled: pi only writes `<cwd>/.pi/tasks/...` on disk
-   * and pushes nothing, so "is there a task?" is only answerable by asking. The
-   * poll is therefore bounded — it exists solely to catch the first task and
-   * stops for good the moment one is seen.
+   * and pushes nothing, so "how many tasks are running?" is only answerable by
+   * asking. That is also why the ticker does not stop at the first task: the
+   * count on a revealed pill has to follow tasks the user starts later.
    */
-  const probeForFirstTask = (agentId: string) => {
+  const pollTasks = (agentId: string) => {
     const state = pills.get(agentId);
-    if (!state || state.registration || state.probeInFlight) return;
+    if (!state || state.probeInFlight) return;
     const target = state.target;
     // Without cwd + sessionId the task dir cannot be located; keep waiting for
-    // an agent update that carries them (the ticker re-probes).
+    // an agent update that carries them (the ticker re-polls).
     if (!target) return;
     state.probeInFlight = true;
     void client
       .rpc(bgListRpc, target)
       .then(({ tasks }) => {
         const current = pills.get(agentId);
-        // ANY task counts, not just a running one: the pill is a permanent
-        // marker that this session uses background tasks.
-        if (stopped || !current || current.registration || tasks.length === 0) return;
-        addPill(agentId, current);
+        const running = tasks.filter((task) => task.status === "running").length;
+        if (!stopped && current) {
+          if (!current.registration && tasks.length > 0) {
+            // ANY task counts, not just a running one: the pill is a permanent
+            // marker that this session uses background tasks.
+            current.running = running;
+            addPill(agentId, current);
+          } else if (current.running !== running) {
+            // Polled rows are deep-equal while a task runs, so an unchanged
+            // count must not touch the registration (that re-renders the
+            // composer row).
+            current.running = running;
+            current.registration?.update({ label: pillLabel(running) });
+          }
+        }
+        return undefined;
       })
       .catch(() => {
         // Unreadable task state (missing dir, permissions) looks the same as a
-        // session with no tasks yet, so stay hidden and let the next tick retry.
+        // session with no tasks yet, so leave the pill as it is and retry on
+        // the next tick.
       })
       .finally(() => {
         state.probeInFlight = false;
       });
   };
 
-  const startDiscovery = (state: PillState, agentId: string) => {
-    if (state.registration) return;
+  const startPolling = (state: PillState, agentId: string) => {
     // Re-check right away (a new target may already have tasks) and keep the
-    // ticker going only until the first one shows up.
+    // ticker running for the agent's lifetime: it both reveals the pill and
+    // keeps its count current.
     if (state.timer === null) {
-      state.timer = setInterval(() => probeForFirstTask(agentId), PILL_DISCOVERY_INTERVAL_MS);
+      state.timer = setInterval(() => pollTasks(agentId), PILL_POLL_INTERVAL_MS);
     }
-    probeForFirstTask(agentId);
+    pollTasks(agentId);
   };
 
   const register = (agent: PillAgent) => {
@@ -232,10 +249,12 @@ function contributeBgTasksPills(client: PluginClientContext): () => void {
         existing.registration.remove();
         existing.registration = null;
         existing.workspaceId = agent.workspaceId;
+        // The new target's count is unknown until the next poll paints it.
+        existing.running = null;
         addPill(agent.id, existing);
       } else {
         existing.workspaceId = agent.workspaceId;
-        startDiscovery(existing, agent.id);
+        startPolling(existing, agent.id);
       }
       return;
     }
@@ -245,9 +264,10 @@ function contributeBgTasksPills(client: PluginClientContext): () => void {
       target,
       timer: null,
       probeInFlight: false,
+      running: null,
     };
     pills.set(agent.id, state);
-    startDiscovery(state, agent.id);
+    startPolling(state, agent.id);
   };
   const removePill = (agentId: string) => {
     dropPill(agentId);

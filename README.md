@@ -7,7 +7,7 @@ Makes two kinds of Paseo timeline rows **visible in real time**, and adds a **"B
 | **shell tool calls**     | Output is only easy to read when finished           | Auto-expands while running, output grows as it runs; auto-collapses when done  |
 | **thinking (reasoning)** | Collapsed, so you can't tell if the model is moving | Auto-expands while the model thinks, reasoning visible as it streams; auto-collapses when done |
 
-Plus: a **"Bg tasks" composer pill** (input-box row, alongside Tasks / Subagents) that opens a **popover** listing pi's running `bg_run` / `bg_delegate` tasks; tapping a row opens a detail tab with live log tail and a SIGTERM action — see below.
+Plus: a **"Bg tasks" composer pill** (input-box row, alongside Tasks / Subagents) whose label carries the number of **running** background tasks (`Bg tasks 2`), and that opens a **popover** listing pi's running `bg_run` / `bg_delegate` tasks; tapping a row opens a detail tab with live log tail and a SIGTERM action — see below.
 
 ## What it looks like
 
@@ -67,7 +67,7 @@ In both cases you can click to see the full content (the full output for shell, 
 
 ## Background tasks popover
 
-Paseo sees pi's *sessions* (agents), but not pi's internal background tasks (`bg_run`, `bg_delegate`, subagent workflows). pi writes those to `<cwd>/.pi/tasks/<sessionId>-<pid>/<id>.json` (one folder per pi process, `cwd` = the agent's working directory) with a sibling `<id>.output` log — the plugin reads exactly that, so no pi-side change is needed. Each pill is scoped to **its own agent's session**: the client takes `cwd` + `persistence.sessionId` from the agent snapshot it already subscribes to, and the server lists only run dirs whose name starts with that session id, so a workspace's other sessions stay invisible. The popover shows **running tasks only**; tapping a row opens the task as a **tab in the workspace tab bar** (per-task workspace panel: status, command, cwd, exit info, live log tail, SIGTERM). The pill is **created lazily — on the session's first background task — and then kept forever**: a session that has never run one keeps the composer row free (no button at all), and once a task has been seen the pill stays, whether that task is still running, finished, or its run dir is gone. Catching that first task needs a poll (pi pushes nothing, it only writes `.pi/tasks`), but the poll is **bounded**: a per-session 5s ticker exists only while the pill is still missing and stops for good at the first task; a revealed session polls nothing. The popover itself polls the session's task list (`client/bg-tasks-popover.tsx`, 5s) only while it is open — a task's detail tab, once opened, stays in the tab bar.
+Paseo sees pi's *sessions* (agents), but not pi's internal background tasks (`bg_run`, `bg_delegate`, subagent workflows). pi writes those to `<cwd>/.pi/tasks/<sessionId>-<pid>/<id>.json` (one folder per pi process, `cwd` = the agent's working directory) with a sibling `<id>.output` log — the plugin reads exactly that, so no pi-side change is needed. Each pill is scoped to **its own agent's session**: the client takes `cwd` + `persistence.sessionId` from the agent snapshot it already subscribes to, and the server lists only run dirs whose name starts with that session id, so a workspace's other sessions stay invisible. The pill's **label carries the live count of running tasks** (`Bg tasks 2`; plain `Bg tasks` at zero), so the count is readable without opening the popover. The popover shows **running tasks only**; tapping a row opens the task as a **tab in the workspace tab bar** (per-task workspace panel: status, command, cwd, exit info, live log tail, SIGTERM). The pill is **created lazily — on the session's first background task — and then kept forever**: a session that has never run one keeps the composer row free (no button at all), and once a task has been seen the pill stays, whether that task is still running, finished, or its run dir is gone. Both jobs need a poll (pi pushes nothing, it only writes `.pi/tasks`), so a per-session 5s ticker reads the task list for the agent's whole lifetime: it creates the pill at the first task it sees, and afterwards repaints the label only when the running count actually changes (a status update on an unchanged count never touches the registration, so the composer row does not re-render). The popover polls the same list at the same 5s cadence while it is open (`client/bg-tasks-popover.tsx`) — a task's detail tab, once opened, stays in the tab bar.
 
 - **List** (`index.server.ts` → `server/bg-tasks.ts`, scanned in the daemon's Node subprocess): every task's name, command, status (`pending` / `running` / `completed` / `failed` / `killed`), exit code, signal, pid, cwd, agent flag, and size. Unknown statuses are skipped; a session with no run dir yet yields an empty list.
 - **Live clock**: a running task's elapsed chip is driven by a local 1s ticker (`client/use-now.ts`), not by the 5s poll — pi keeps the task json byte-identical while the task runs, so polled data is deep-equal and would never re-render.
@@ -77,7 +77,7 @@ Paseo sees pi's *sessions* (agents), but not pi's internal background tasks (`bg
 ### Layout
 
 ```
-index.client.tsx per-agent composer pill (ListTodo icon, "Bg tasks" label; popover behavior; created on the session's first task, then permanent)
+index.client.tsx per-agent composer pill (ListTodo icon, "Bg tasks <running>" label refreshed by a 5s task-list poll; popover behavior; created on the session's first task, then permanent)
 index.server.ts        new: contributes live-activity.list / .log / .kill RPCs
 client/bg-tasks-popover.tsx  BgTasksPopover / BgTaskRow / BgLogView (5s polling; popover body)
 client/bg-task-detail.tsx    BgTaskDetailBody (detail tab: chips, live log tail, SIGTERM)
@@ -119,7 +119,7 @@ The plugin cannot read `theme.spacing` / `theme.fontSize`, so these values are h
 
 ```
 
-index.client.tsx registers 2 transformers + 2 renderers + per-agent composer pills (popover behavior)
+index.client.tsx registers 2 transformers + 2 renderers + per-agent composer pills (popover behavior, live running-count label)
 client/timeline-badge.tsx shared badge: native tokens + styles + icon slot (both rows use it)
 client/use-auto-collapse.ts open while active, fold 5s after it ends (both rows)
 client/use-toggle.ts expand state: follows "is active", then follows the user once clicked
