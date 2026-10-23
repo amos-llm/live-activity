@@ -1,0 +1,4 @@
+node_modules/
+
+# pi background-task state written per workspace/session
+.pi/
