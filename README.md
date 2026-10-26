@@ -13,13 +13,14 @@ Shell row (auto-expanded while running):
 
 ```
 ▾ Shell  npm run build
-  ┌────────────────────────────────────────┐
-  │ $ npm run build                        │
-  │                                        │
-  │ compiled 128 modules in 1.2s           │
-  │ done in 1.8s                           │  ← refreshes as it runs, capped at 400px
-  │                                        │
-  └────────────────────────────────────────┘
+  ┌──────────────────────────────┐
+  │ $ npm run build              │
+  │                              │
+  │ compiled 128 modules in 1.2s │
+  │ done in 1.8s                 │  ← refreshes as it runs, capped at 400px
+  │                              │
+  └──────────────────────────────┘
+```
 
 Shell row (auto-collapsed when finished; failure is shown by the alert icon):
 
@@ -35,12 +36,11 @@ Thinking row (auto-expanded while the model is thinking; follows the newest text
 
 ▾ Thought Check whether Paseo's ACP adapter maps partialResult into the timeline…
   ┌────────────────────────────────────────┐
-  │ Check whether Paseo's ACP adapter maps  │
-  │ partialResult into the timeline. If it  │
-  │ does, reasoning updates arrive per      │  ← follows the newest text while you are at the bottom (capped at 400px)
-  │ chunk and the row can stay live.        │
+  │ Check whether Paseo's ACP adapter maps │
+  │ partialResult into the timeline. If it │
+  │ does, reasoning updates arrive per     │  ← follows the newest text while you are at the bottom (capped at 400px)
+  │ chunk and the row can stay live.       │
   └────────────────────────────────────────┘
-
 ```
 
 Thinking row (auto-collapsed a few seconds after the thought ends; the header keeps the start of the thought on one line):
@@ -103,7 +103,7 @@ shared/live-shell.ts shell row data contract (v4: adds `truncated`)
 shared/live-thinking.ts thinking row data contract
 client/host-modules.test.ts asserts no private host packages are imported (from/import/require)
 
-````
+```
 
 The host-module guard (`client/host-modules.test.ts`) keeps client code on the module set Paseo hands to plugins.
 
@@ -116,7 +116,7 @@ Zero runtime dependencies (only host modules Paseo provides: `@getpaseo/plugin/*
 ```bash
 paseo plugin add <git-remote>:live-activity
 paseo plugin reload live-activity
-````
+```
 
 Local development:
 

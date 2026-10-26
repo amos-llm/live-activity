@@ -1,3 +1,4 @@
+import type { PluginCleanup } from "@getpaseo/plugin";
 import type { PluginClientContext } from "@getpaseo/plugin/client";
 import { liveShellTimelineItem } from "./client/live-shell-item";
 import { LiveShellRow } from "./client/live-shell-row";
@@ -18,34 +19,40 @@ import {
  * Every other item returns `undefined` from a transformer, so Paseo keeps
  * rendering its own row.
  */
-export default function contribute(client: PluginClientContext) {
-  client.addTimelineTransformer({
-    id: "live-shell",
-    query: { itemType: "tool_call" },
-    transform({ item }) {
-      return liveShellTimelineItem(item);
-    },
-  });
+export default function contribute(client: PluginClientContext): PluginCleanup {
+  const cleanups = [
+    client.addTimelineTransformer({
+      id: "live-shell",
+      query: { itemType: "tool_call" },
+      transform({ item }) {
+        return liveShellTimelineItem(item);
+      },
+    }),
 
-  client.addTimelineRenderer({
-    kind: LIVE_SHELL_KIND,
-    version: LIVE_SHELL_VERSION,
-    schema: liveShellDataSchema,
-    Component: LiveShellRow,
-  });
+    client.addTimelineRenderer({
+      kind: LIVE_SHELL_KIND,
+      version: LIVE_SHELL_VERSION,
+      schema: liveShellDataSchema,
+      Component: LiveShellRow,
+    }),
 
-  client.addTimelineTransformer({
-    id: "live-thinking",
-    query: { itemType: "reasoning" },
-    transform({ item, phase }) {
-      return liveThinkingTimelineItem(item, phase);
-    },
-  });
+    client.addTimelineTransformer({
+      id: "live-thinking",
+      query: { itemType: "reasoning" },
+      transform({ item, phase }) {
+        return liveThinkingTimelineItem(item, phase);
+      },
+    }),
 
-  client.addTimelineRenderer({
-    kind: LIVE_THINKING_KIND,
-    version: LIVE_THINKING_VERSION,
-    schema: liveThinkingDataSchema,
-    Component: LiveThinkingRow,
-  });
+    client.addTimelineRenderer({
+      kind: LIVE_THINKING_KIND,
+      version: LIVE_THINKING_VERSION,
+      schema: liveThinkingDataSchema,
+      Component: LiveThinkingRow,
+    }),
+  ];
+
+  return () => {
+    for (const cleanup of cleanups) cleanup();
+  };
 }
