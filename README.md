@@ -17,7 +17,7 @@ Shell row (auto-expanded while running):
   │ $ npm run build              │
   │                              │
   │ compiled 128 modules in 1.2s │
-  │ done in 1.8s                 │  ← refreshes as it runs, capped at 400px
+  │ done in 1.8s                 │  ← follows the newest output while you are at the bottom (capped at 400px)
   │                              │
   └──────────────────────────────┘
 ```
@@ -60,7 +60,8 @@ In both cases you can click to see the full content (the full output for shell, 
 - Status is shown by icon only in the header, never by word (no `failed` / `canceled`): `TriangleAlert` (danger) on failure, `Ban` (muted) when canceled. The detail block carries the facts instead — a non-zero-safe `exit N` line and the error message, both only visible once expanded. Other icons use their lucide names: `SquareTerminal` for shell, `Brain` for thinking, and a 90°-rotated `ChevronRight` on hover/expand (natively the arrow only appears on hover).
 - While running, the command wraps across as many lines as it needs; once the command ends, the collapsed row keeps it on **one line with a trailing ellipsis**.
 - The detail block is the native one: a **capped vertical scroll** (400px, 260px on a compact layout) around a horizontal scroll for unwrapped lines, so a chatty build never pushes the timeline off screen. Its content is the command and output in one monospace block prefixed by a muted `$ `.
-- The thinking row expands while streaming and keeps its detail block on the **newest** text — but only while you are **at the bottom** of it. Scroll up and the row stops moving on its own: the stream keeps appending below and your view stays where you left it. Scroll back to the bottom and the follow resumes; opening the row again after it collapsed re-arms it. A few seconds after the thought completes it folds back to one line. The collapsed header keeps the **beginning** of the thought (220 characters, 120 on a compact layout), which identifies what was thought; the scan stops once the line is full, so a long thought costs no more than a short one.
+- The shell row keeps the block on the **newest** output while the command is still writing, with the same rule as the thinking row below: only while you are at the bottom, only an **upward** scroll stops it, and scrolling back down (or reopening the row) resumes it. A finished command is **history**: expanding it starts at the top, so you read it from the command line down.
+- The thinking row expands while streaming and keeps its detail block on the **newest** text — but only while you are **at the bottom** of it. Scroll up and the row stops moving on its own: the stream keeps appending below and your view stays where you left it. Scroll back to the bottom and the follow resumes; opening the row again after it collapsed re-arms it. A thought that had already completed when you opened it is **history** and starts at the top. Only an **upward** scroll stops the follow: the block is scrolled and measured a frame after the text lands (and the web client re-reads the node 100ms after scrolling goes idle), so an event that merely reports a content size that grew past the row's own scroll is not the reader moving, and must not freeze the row mid-stream. Every follow scrolls twice — now and one frame later — because the content size change can arrive before the new text is laid out. The follow lasts one chunk past the end, because the last chunk arrives together with the `complete` phase. A few seconds after the thought completes it folds back to one line. The collapsed header keeps the **beginning** of the thought (220 characters, 120 on a compact layout), which identifies what was thought; the scan stops once the line is full, so a long thought costs no more than a short one.
 - Output is **clamped by the transformer** to the tail (2000 lines / 50 KB, like the providers do), and the detail block says so when the head was dropped. Providers such as pi already truncate; this keeps a provider that doesn't from pushing megabytes through the timeline on every streaming update.
 
 ## Alignment with native styles
@@ -93,10 +94,10 @@ The plugin cannot read `theme.spacing` / `theme.fontSize`, so these values are h
 index.client.tsx registers 2 transformers + 2 renderers
 client/timeline-badge.tsx shared badge: native tokens + styles + icon slot (both rows use it)
 client/use-auto-collapse.ts open while active, fold 5s after it ends (both rows)
-client/use-pinned-scroll.ts follow the newest content only while the reader is at the bottom (isPinnedToBottom tested)
+client/use-pinned-scroll.ts follow the newest content only while the reader is at the bottom; only an upward scroll stops it (isPinnedToBottom + resolvePinned tested)
 client/use-toggle.ts expand state: follows "is active", then follows the user once clicked
 client/live-shell-item.ts pure logic: read tool_call → shell data, keepOutputTail() (tested)
-client/live-shell-row.tsx shell row: badge + capped detail block
+client/live-shell-row.tsx shell row: badge + capped detail block that follows the newest output (usePinnedScroll)
 client/live-thinking-item.ts pure logic: read reasoning + liveThinkingLine() (tested)
 client/live-thinking-row.tsx thinking row: badge + detail block
 shared/live-shell.ts shell row data contract (v4: adds `truncated`)

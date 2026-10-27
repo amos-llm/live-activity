@@ -1,5 +1,5 @@
 import type { PluginTimelineItemProps } from "@getpaseo/plugin/client";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { ScrollView, Text } from "react-native";
 import type { LiveThinkingData } from "../shared/live-thinking";
 import { liveThinkingLine } from "./live-thinking-item";
@@ -30,6 +30,11 @@ export function LiveThinkingRow({
   const data = item.data;
   const { expanded, toggle } = useToggle(useAutoCollapse(data.streaming));
   const { ref: scrollRef, follow, reset, onScroll } = usePinnedScroll();
+  // A thought that is already committed when the row opens is history and
+  // starts at the top; a thought that was live when it opened keeps following
+  // to the last chunk, which lands together with the `complete` phase.
+  const wasLive = useRef(data.streaming);
+  const wasExpanded = useRef(expanded);
 
   const styles = useMemo(
     () => ({
@@ -51,6 +56,24 @@ export function LiveThinkingRow({
     [data.text, layout.compact],
   );
 
+  /** Follow the newest text only while the thought is still streaming. */
+  const followText = useCallback(() => {
+    if (data.streaming || wasLive.current) follow();
+  }, [data.streaming, follow]);
+
+  useEffect(() => {
+    const opened = expanded && !wasExpanded.current;
+    wasExpanded.current = expanded;
+    if (!expanded) {
+      wasLive.current = false;
+      return;
+    }
+    // Re-arm only when the block opens, so a reader who scrolled up is not
+    // pulled back down when the thought completes.
+    if (opened) reset();
+    if (data.streaming) wasLive.current = true;
+  }, [expanded, data.streaming, reset]);
+
   const renderDetails = useCallback(
     () => (
       <ScrollView
@@ -61,22 +84,15 @@ export function LiveThinkingRow({
         showsVerticalScrollIndicator
         scrollEventThrottle={16}
         onScroll={onScroll}
-        onContentSizeChange={follow}
+        onContentSizeChange={followText}
       >
         <Text style={styles.text} selectable>
           {data.text}
         </Text>
       </ScrollView>
     ),
-    [styles, data.text, onScroll, follow, scrollRef],
+    [styles, data.text, onScroll, followText, scrollRef],
   );
-
-  // The detail block only follows the stream while the reader is at the bottom.
-  // `follow` (onContentSizeChange above) checks that before scrolling, so a
-  // reader who scrolled up keeps their position; reopening the row re-arms it.
-  useEffect(() => {
-    if (expanded) reset();
-  }, [expanded, reset]);
 
   return (
     <TimelineBadge
