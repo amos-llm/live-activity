@@ -2,6 +2,7 @@ import type { PluginTimelineItemProps } from "@getpaseo/plugin/client";
 import { useCallback, useMemo } from "react";
 import { Text } from "react-native";
 import type { LiveReadData } from "../shared/live-read";
+import { shortenPath } from "./file-path";
 import { DetailBlock } from "./detail-block";
 import { gutterNumbers, lineCount, readRangeLabel } from "./live-read-item";
 import { MONO_FONT, TimelineBadge } from "./timeline-badge";
@@ -33,6 +34,9 @@ export function LiveReadRow({ item, theme, layout }: PluginTimelineItemProps<Liv
     () => gutterNumbers(data.startLine, lines) || undefined,
     [data.startLine, lines],
   );
+  // pi does not report the cwd on a tool call, so the header shortens the path
+  // from the front and the block keeps it whole.
+  const summary = useMemo(() => shortenPath(data.displayPath), [data.displayPath]);
 
   const styles = useMemo(
     () => ({
@@ -77,7 +81,7 @@ export function LiveReadRow({ item, theme, layout }: PluginTimelineItemProps<Liv
       theme={theme}
       icon="Eye"
       label="Read"
-      summary={data.displayPath}
+      summary={summary}
       summaryLines={1}
       failed={data.status === "failed"}
       canceled={data.status === "canceled"}

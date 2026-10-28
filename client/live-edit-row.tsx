@@ -3,6 +3,7 @@ import { useCallback, useMemo } from "react";
 import { Text } from "react-native";
 import type { LiveEditData } from "../shared/live-edit";
 import { DetailBlock } from "./detail-block";
+import { MAX_SUMMARY_PATH_CHARS, shortenPath } from "./file-path";
 import { diffStat, parseDiff, type DiffLineKind } from "./live-edit-item";
 import { MONO_FONT, TimelineBadge } from "./timeline-badge";
 import { useAutoCollapse } from "./use-auto-collapse";
@@ -30,10 +31,12 @@ export function LiveEditRow({ item, theme, layout }: PluginTimelineItemProps<Liv
     () => diffStat(data.additions, data.deletions),
     [data.additions, data.deletions],
   );
-  const summary = useMemo(
-    () => (stat === "" ? data.displayPath : `${data.displayPath} ${stat}`),
-    [data.displayPath, stat],
-  );
+  const summary = useMemo(() => {
+    // The change counts ride in the header, so the path gets what is left.
+    const budget = stat === "" ? MAX_SUMMARY_PATH_CHARS : MAX_SUMMARY_PATH_CHARS - stat.length - 1;
+    const path = shortenPath(data.displayPath, budget);
+    return stat === "" ? path : `${path} ${stat}`;
+  }, [data.displayPath, stat]);
 
   const styles = useMemo(() => {
     const code = {

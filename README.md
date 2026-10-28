@@ -57,7 +57,7 @@ Thinking row (auto-collapsed a few seconds after the thought ends; the header ke
 Read row (auto-expanded while the file is being read):
 
 ```
-▾ Read  client/live-read-row.tsx
+▾ Read  …/live-activity/client/live-read-row.tsx
   /home/ubuntu/live-activity/client/live-read-row.tsx:1–110
    1 import type { PluginTimelineItemProps } from "@getpaseo/plugin/client";
    2 import { useCallback, useMemo } from "react";
@@ -68,13 +68,15 @@ Read row (auto-expanded while the file is being read):
 Edit row (auto-expanded; the header carries the change counts, the block colors the patch):
 
 ```
-▾ Edit  client/live-read-row.tsx +12 -4
+▾ Edit  …/live-activity/client/live-read-row.tsx +12 -4
   /home/ubuntu/live-activity/client/live-read-row.tsx
      4 import { useCallback, useMemo } from "react";
   +  5 import { useNow } from "./use-now";     ← green
   -  6 const A = 1;                            ← red
   +  7 const B = 2;
 ```
+
+A path that does not fit the header is shortened from the **front** (`…/live-activity/client/live-read-row.tsx`) instead of being ellipsized at the end like a native summary — cutting an absolute path at the end removes the file name, which is the part that identifies the row. The detail block always shows the full path.
 
 Search row (auto-expanded; the header keeps the query, the block the matches):
 
@@ -134,7 +136,7 @@ client/use-auto-collapse.ts open while active, fold 5s after it ends (every row)
 client/use-pinned-scroll.ts follow the newest content only while the reader is at the bottom; only an upward scroll stops it (isPinnedToBottom + resolvePinned tested); shell and thinking use it
 client/use-toggle.ts expand state: follows "is active", then follows the user once clicked
 client/clamp-output.ts keepOutputTail() for shell output / keepOutputHead() for reads, patches and results (tested)
-client/file-path.ts displayPath(): strips the agent's cwd like the native row summaries (tested)
+client/file-path.ts displayPath(): strips the agent's cwd like the native row summaries, and shortenPath(): keeps the file name when a path does not fit the header (both tested)
 client/tool-item.ts runtime readers shared by the tool_call rows: asRecord / asString / describeError / readStatus / readItemCwd
 client/live-shell-item.ts pure logic: read tool_call → shell data (tested)
 client/live-shell-row.tsx shell row: badge + capped detail block that follows the newest output (usePinnedScroll)
