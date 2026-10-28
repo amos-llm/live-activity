@@ -1,14 +1,10 @@
 import { LIVE_SHELL_KIND, LIVE_SHELL_VERSION, liveShellDataSchema } from "../shared/live-shell";
+import type { LiveStatus } from "../shared/live-status";
+import { keepOutputTail } from "./clamp-output";
+import { asRecord, asString, describeError, readStatus } from "./tool-item";
 
-const KNOWN_STATUSES = new Set(["running", "completed", "failed", "canceled"]);
-
-/**
- * Output kept in the timeline item. Providers truncate themselves (pi keeps
- * 2000 lines / 50 KB), but not all of them do, and the whole output is
- * serialized on every streaming update, so the transformer clamps it here.
- */
-const MAX_OUTPUT_CHARS = 50 * 1024;
-const MAX_OUTPUT_LINES = 2_000;
+/** Re-exported so the row's clamping rule stays testable from here. */
+export { keepOutputTail };
 
 /** Paseo's native shell detail drops the blank line providers often prepend. */
 function trimLeadingNewlines(text: string): string {
@@ -19,68 +15,12 @@ function trimTrailingNewlines(text: string): string {
   return text.replace(/\n+$/, "");
 }
 
-/**
- * Keeps the tail of a long output. Counting runs backwards on purpose: an output
- * from a provider that does not truncate can be megabytes, and splitting it into
- * an array to count lines would allocate all of it first.
- */
-export function keepOutputTail(text: string): { output: string; truncated: boolean } {
-  let output = text;
-  let truncated = false;
-
-  if (output.length > MAX_OUTPUT_CHARS) {
-    output = output.slice(output.length - MAX_OUTPUT_CHARS);
-    // The first line is almost certainly cut in half; drop it.
-    const firstBreak = output.indexOf("\n");
-    if (firstBreak !== -1) output = output.slice(firstBreak + 1);
-    truncated = true;
-  }
-
-  let lines = 1;
-  for (let index = output.length - 1; index >= 0; index -= 1) {
-    if (output.charCodeAt(index) !== 10) continue;
-    lines += 1;
-    if (lines > MAX_OUTPUT_LINES) return { output: output.slice(index + 1), truncated: true };
-  }
-
-  return { output, truncated };
-}
-
 interface ShellToolCallSnapshot {
   command: string;
   output: string;
-  status: "running" | "completed" | "failed" | "canceled" | "unknown";
+  status: LiveStatus;
   exitCode?: number | null;
   errorText?: string;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
-
-function describeError(value: unknown): string | undefined {
-  if (value === null || value === undefined) return undefined;
-  if (typeof value === "string") return value.trim() === "" ? undefined : value;
-  const message = asString(asRecord(value)?.message);
-  if (message && message.trim() !== "") return message;
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return undefined;
-  }
-}
-
-function readStatus(value: unknown): ShellToolCallSnapshot["status"] {
-  const status = asString(value);
-  return status && KNOWN_STATUSES.has(status)
-    ? (status as ShellToolCallSnapshot["status"])
-    : "unknown";
 }
 
 /**

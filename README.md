@@ -1,10 +1,13 @@
 # live-activity
 
-Makes two kinds of Paseo timeline rows **visible in real time**:
+Makes five kinds of Paseo timeline rows **visible in real time**:
 
 | Row                      | Native behavior                                     | This plugin                                                                                    |
 | ------------------------ | --------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | **shell tool calls**     | Output is only easy to read when finished           | Auto-expands while running, output grows as it runs; auto-collapses when done                  |
+| **read tool calls**      | Collapsed to a path, so what was read is hidden     | Auto-expands and shows the file with line numbers starting at the read's `offset`              |
+| **edit tool calls**      | Collapsed to a path                                 | Auto-expands into a colored diff (adds in success green, removes in danger red) with `+a -d`   |
+| **search tool calls**    | Collapsed to the query                              | Auto-expands into the matches, file list or web results, with counts and duration when sent    |
 | **thinking (reasoning)** | Collapsed, so you can't tell if the model is moving | Auto-expands while the model thinks, reasoning visible as it streams; auto-collapses when done |
 
 ## What it looks like
@@ -51,18 +54,51 @@ Thinking row (auto-collapsed a few seconds after the thought ends; the header ke
 
 ```
 
-In both cases you can click to see the full content (the full output for shell, the full thinking text for thinking).
+Read row (auto-expanded while the file is being read):
+
+```
+▾ Read  client/live-read-row.tsx
+  /home/ubuntu/live-activity/client/live-read-row.tsx:1–110
+   1 import type { PluginTimelineItemProps } from "@getpaseo/plugin/client";
+   2 import { useCallback, useMemo } from "react";
+   3 import { Text } from "react-native";        ← line numbers start at the read's offset
+   4 …
+```
+
+Edit row (auto-expanded; the header carries the change counts, the block colors the patch):
+
+```
+▾ Edit  client/live-read-row.tsx +12 -4
+  /home/ubuntu/live-activity/client/live-read-row.tsx
+     4 import { useCallback, useMemo } from "react";
+  +  5 import { useNow } from "./use-now";     ← green
+  -  6 const A = 1;                            ← red
+  +  7 const B = 2;
+```
+
+Search row (auto-expanded; the header keeps the query, the block the matches):
+
+```
+▾ Search  TODO
+  12 matches · 8 files · 340ms
+  client/live-read-row.tsx:41:  // TODO: …
+  client/live-search-row.tsx:12:  // TODO: …
+```
+
+In every case you can click to see the full content.
 
 ## Behavior details
 
-- **A row expands by itself while its content is still growing** — the shell command while it runs, the thought while the model thinks — and auto-collapses 5s after it ends; clicking toggles it manually (once you click, that row follows you and no longer changes automatically). Rows mounted already finished start collapsed.
+- **A row expands by itself while its content is still growing or arriving** — the shell command while it runs, the file while it is read, the patch while it is applied, the results while the search runs, the thought while the model thinks — and auto-collapses 5s after it ends; clicking toggles it manually (once you click, that row follows you and no longer changes automatically). Rows mounted already finished start collapsed.
 - When expanded, the row header takes a `surface1` background and joins the detail block below into one unit; when collapsed it is **completely borderless** (matching the native badge).
-- Status is shown by icon only in the header, never by word (no `failed` / `canceled`): `TriangleAlert` (danger) on failure, `Ban` (muted) when canceled. The detail block carries the facts instead — a non-zero-safe `exit N` line and the error message, both only visible once expanded. Other icons use their lucide names: `SquareTerminal` for shell, `Brain` for thinking, and a 90°-rotated `ChevronRight` on hover/expand (natively the arrow only appears on hover).
+- Status is shown by icon only in the header, never by word (no `failed` / `canceled`): `TriangleAlert` (danger) on failure, `Ban` (muted) when canceled. The detail block carries the facts instead — a non-zero-safe `exit N` line and the error message, both only visible once expanded. Other icons use their lucide names: `SquareTerminal` for shell, `Eye` for read, `Pencil` for edit, `Search` for search, `Brain` for thinking, and a 90°-rotated `ChevronRight` on hover/expand (natively the arrow only appears on hover).
 - While running, the command wraps across as many lines as it needs; once the command ends, the collapsed row keeps it on **one line with a trailing ellipsis**.
 - The detail block is the native one: a **capped vertical scroll** (400px, 260px on a compact layout) around a horizontal scroll for unwrapped lines, so a chatty build never pushes the timeline off screen. Its content is the command and output in one monospace block prefixed by a muted `$ `.
 - The shell row keeps the block on the **newest** output while the command is still writing, with the same rule as the thinking row below: only while you are at the bottom, only an **upward** scroll stops it, and scrolling back down (or reopening the row) resumes it. A finished command is **history**: expanding it starts at the top, so you read it from the command line down.
 - The thinking row expands while streaming and keeps its detail block on the **newest** text — but only while you are **at the bottom** of it. Scroll up and the row stops moving on its own: the stream keeps appending below and your view stays where you left it. Scroll back to the bottom and the follow resumes; opening the row again after it collapsed re-arms it. A thought that had already completed when you opened it is **history** and starts at the top. Only an **upward** scroll stops the follow: the block is scrolled and measured a frame after the text lands (and the web client re-reads the node 100ms after scrolling goes idle), so an event that merely reports a content size that grew past the row's own scroll is not the reader moving, and must not freeze the row mid-stream. Every follow scrolls twice — now and one frame later — because the content size change can arrive before the new text is laid out. The follow lasts one chunk past the end, because the last chunk arrives together with the `complete` phase. A few seconds after the thought completes it folds back to one line. The collapsed header keeps the **beginning** of the thought (220 characters, 120 on a compact layout), which identifies what was thought; the scan stops once the line is full, so a long thought costs no more than a short one.
 - Output is **clamped by the transformer** to the tail (2000 lines / 50 KB, like the providers do), and the detail block says so when the head was dropped. Providers such as pi already truncate; this keeps a provider that doesn't from pushing megabytes through the timeline on every streaming update.
+- The read / edit / search rows clamp the **head** instead: a file is read from its first line, a patch from its first hunk, a result list from its first match. Dropped content is reported in a muted line under the block.
+- Those three rows are not scrolled for you. Every provider seen so far reports a read, a patch or a set of matches **all at once when the call ends** (pi sends partial results only for shell output), so the block is static once it has content and starts at the top — the position you want for a file, a patch or a list. The edit row falls back to the **first edit's old/new text** (marked as such under the block) when the provider reports no patch, which is what a running edit looks like before the result lands.
 
 ## Alignment with native styles
 
@@ -91,16 +127,30 @@ The plugin cannot read `theme.spacing` / `theme.fontSize`, so these values are h
 
 ```
 
-index.client.tsx registers 2 transformers + 2 renderers
-client/timeline-badge.tsx shared badge: native tokens + styles + icon slot (both rows use it)
-client/use-auto-collapse.ts open while active, fold 5s after it ends (both rows)
-client/use-pinned-scroll.ts follow the newest content only while the reader is at the bottom; only an upward scroll stops it (isPinnedToBottom + resolvePinned tested)
+index.client.tsx registers 5 transformers + 5 renderers
+client/timeline-badge.tsx shared badge: native tokens + styles + icon slot (every row uses it)
+client/detail-block.tsx shared detail block: capped vertical scroll, optional line-number gutter, meta / footnote / error lines
+client/use-auto-collapse.ts open while active, fold 5s after it ends (every row)
+client/use-pinned-scroll.ts follow the newest content only while the reader is at the bottom; only an upward scroll stops it (isPinnedToBottom + resolvePinned tested); shell and thinking use it
 client/use-toggle.ts expand state: follows "is active", then follows the user once clicked
-client/live-shell-item.ts pure logic: read tool_call → shell data, keepOutputTail() (tested)
+client/clamp-output.ts keepOutputTail() for shell output / keepOutputHead() for reads, patches and results (tested)
+client/file-path.ts displayPath(): strips the agent's cwd like the native row summaries (tested)
+client/tool-item.ts runtime readers shared by the tool_call rows: asRecord / asString / describeError / readStatus / readItemCwd
+client/live-shell-item.ts pure logic: read tool_call → shell data (tested)
 client/live-shell-row.tsx shell row: badge + capped detail block that follows the newest output (usePinnedScroll)
+client/live-read-item.ts pure logic: read tool_call → file data, lineCount / gutterNumbers / readRangeLabel (tested)
+client/live-read-row.tsx read row: badge + line-numbered content
+client/live-edit-item.ts pure logic: read tool_call → patch data, parseDiff / synthesizeDiff / diffStat (tested)
+client/live-edit-row.tsx edit row: badge + colored diff
+client/live-search-item.ts pure logic: read tool_call → results, searchMeta / searchBody (tested)
+client/live-search-row.tsx search row: badge + results block
 client/live-thinking-item.ts pure logic: read reasoning + liveThinkingLine() (tested)
 client/live-thinking-row.tsx thinking row: badge + detail block
+shared/live-status.ts status enum shared by every row contract
 shared/live-shell.ts shell row data contract (v4: adds `truncated`)
+shared/live-read.ts read row data contract
+shared/live-edit.ts edit row data contract
+shared/live-search.ts search row data contract
 shared/live-thinking.ts thinking row data contract
 client/host-modules.test.ts asserts no private host packages are imported (from/import/require)
 
@@ -108,7 +158,7 @@ client/host-modules.test.ts asserts no private host packages are imported (from/
 
 The host-module guard (`client/host-modules.test.ts`) keeps client code on the module set Paseo hands to plugins.
 
-Key implementation point: Paseo's `@getpaseo/protocol` is a **private** host package, and a plugin is rejected by the boundary check at install time even if it only does `import type` (that is exactly how the upstream `colorful-agent-activity` failed). So the shapes of the timeline items are **re-parsed at runtime** inside `readShellToolCall()` / `readReasoning()`, without importing any private types.
+Key implementation point: Paseo's `@getpaseo/protocol` is a **private** host package, and a plugin is rejected by the boundary check at install time even if it only does `import type` (that is exactly how the upstream `colorful-agent-activity` failed). So the shapes of the timeline items are **re-parsed at runtime** inside `readShellToolCall()` / `readReadToolCall()` / `readEditToolCall()` / `readSearchToolCall()` / `readReasoning()`, without importing any private types. The tool-call rows each own one transformer on `itemType: "tool_call"`: the host tries them in registration order and takes the first one that returns items, and each returns `undefined` for the detail types it does not handle.
 
 ## Install / develop
 
@@ -137,9 +187,12 @@ A directory install remembers the path and the daemon loads from it on every sta
 
 ## Limitations
 
-- Only shell rows inside `tool_call` and `reasoning` rows are taken over; `read` / `edit` / `search` / `todo` / assistant messages and so on keep their native rendering.
+- Only `shell` / `read` / `edit` / `search` tool calls and `reasoning` rows are taken over; `write` / `fetch` / `sub_agent` / `worktree_setup` / `plan` / `todo` / `unknown` tool calls, assistant messages and so on keep their native rendering.
 - Rows that have been taken over no longer have the interactive behavior of native rows (this only does display).
-- When the provider does not report incremental output/incremental thinking, the row content only appears all at once at the end.
+- When the provider does not report incremental output / content / thinking, the row content only appears all at once at the end. That is the normal case for reads, patches and searches; only the shell row is streamed.
+- No syntax highlighting: native colors reads and diffs per token with the host's highlighter, which a plugin cannot reach. The read row gets line numbers and the edit row gets one color per diff line, nothing finer.
+- The edit diff is colored text, not the native `DiffViewer`: git-style patches keep their `@@` hunks as muted lines and show no line-number gutter (pi's patches carry their own numbers in the text).
+- Web results in the search row are plain text, not links.
 - The label shimmer native rows show while a call is loading is not reproduced: it needs the host's text measurement and gradient layers. Streaming rows use the color/opacity treatment, and `Thinking`/`Thought` carry the state.
 - On a compact layout native opens tool-call details in a bottom sheet; this plugin always renders them inline (with a smaller 260px cap and a shorter thinking line) because plugins cannot open that sheet.
 - `isLastInSequence` spacing (`spacing[4]` under the last row of a sequence) is host-internal, so every row gets the normal `spacing[1]` gap.

@@ -47,14 +47,14 @@ describe("plugin contribution", () => {
     expect(typeof contribute(client as never)).toBe("function");
   });
 
-  it("registers the 2 transformers + 2 renderers", async () => {
+  it("registers the 5 transformers + 5 renderers", async () => {
     const { default: contribute } = await import("../index.client");
     const { client } = fakeClient();
 
     contribute(client as never);
 
-    expect(client.addTimelineTransformer).toHaveBeenCalledTimes(2);
-    expect(client.addTimelineRenderer).toHaveBeenCalledTimes(2);
+    expect(client.addTimelineTransformer).toHaveBeenCalledTimes(5);
+    expect(client.addTimelineRenderer).toHaveBeenCalledTimes(5);
   });
 
   it("unregisters every contribution when cleanup runs", async () => {
@@ -63,7 +63,7 @@ describe("plugin contribution", () => {
 
     contribute(client as never)();
 
-    expect(cleanups).toHaveLength(4);
+    expect(cleanups).toHaveLength(10);
     for (const unregister of cleanups) expect(unregister).toHaveBeenCalledTimes(1);
   });
 });
