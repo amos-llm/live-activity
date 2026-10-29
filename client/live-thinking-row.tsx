@@ -3,16 +3,15 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { ScrollView, Text } from "react-native";
 import type { LiveThinkingData } from "../shared/live-thinking";
 import { liveThinkingLine } from "./live-thinking-item";
-import { CODE_LINE_STYLE, DETAIL_FILL_STYLE, TimelineBadge, UI_FONT } from "./timeline-badge";
-import { useAutoOpen } from "./use-auto-collapse";
+import { CODE_LINE_STYLE, TimelineBadge, UI_FONT } from "./timeline-badge";
+import { useAutoCollapse } from "./use-auto-collapse";
 import { usePinnedScroll } from "./use-pinned-scroll";
 import { useToggle } from "./use-toggle";
 
-/** Native detail blocks cap their scroll area at 400px. */
+/** Native detail blocks cap their scroll area at 400px, on every layout. */
 const DETAIL_MAX_HEIGHT = 400;
 /** Characters kept in the one-line summary. */
 const SUMMARY_CHARS = 220;
-const SUMMARY_CHARS_COMPACT = 120;
 
 /**
  * Thinking row: expands while the thought streams so the reasoning is readable
@@ -21,13 +20,9 @@ const SUMMARY_CHARS_COMPACT = 120;
  * bottom, and stops moving the moment they scroll up; collapsed, the header
  * keeps the start of the thought, which is what identifies it.
  */
-export function LiveThinkingRow({
-  item,
-  theme,
-  layout,
-}: PluginTimelineItemProps<LiveThinkingData>) {
+export function LiveThinkingRow({ item, theme }: PluginTimelineItemProps<LiveThinkingData>) {
   const data = item.data;
-  const { expanded, toggle } = useToggle(useAutoOpen(data.streaming, layout.compact));
+  const { expanded, toggle } = useToggle(useAutoCollapse(data.streaming));
   const { ref: scrollRef, follow, reset, onScroll } = usePinnedScroll();
   // A thought that is already committed when the row opens is history and
   // starts at the top; a thought that was live when it opened keeps following
@@ -37,7 +32,7 @@ export function LiveThinkingRow({
 
   const styles = useMemo(
     () => ({
-      scroll: layout.compact ? DETAIL_FILL_STYLE : { maxHeight: DETAIL_MAX_HEIGHT },
+      scroll: { maxHeight: DETAIL_MAX_HEIGHT },
       text: {
         fontFamily: UI_FONT,
         fontSize: 14,
@@ -45,15 +40,12 @@ export function LiveThinkingRow({
         color: theme.colors.foreground,
       },
     }),
-    [theme, layout.compact],
+    [theme],
   );
 
   // Memoized on the text so a streaming chunk only re-renders the row when the
   // visible head of the thought actually changed.
-  const summary = useMemo(
-    () => liveThinkingLine(data.text, layout.compact ? SUMMARY_CHARS_COMPACT : SUMMARY_CHARS),
-    [data.text, layout.compact],
-  );
+  const summary = useMemo(() => liveThinkingLine(data.text, SUMMARY_CHARS), [data.text]);
 
   /** Follow the newest text only while the thought is still streaming. */
   const followText = useCallback(() => {
@@ -101,7 +93,6 @@ export function LiveThinkingRow({
       summary={summary}
       summaryLines={1}
       active={data.streaming || expanded}
-      compact={layout.compact}
       expanded={expanded}
       onToggle={toggle}
       renderDetails={renderDetails}

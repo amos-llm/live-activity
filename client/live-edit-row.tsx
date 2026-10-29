@@ -6,7 +6,7 @@ import { DetailBlock } from "./detail-block";
 import { MAX_SUMMARY_PATH_CHARS, shortenPath } from "./file-path";
 import { diffStat, parseDiff, type DiffLineKind } from "./live-edit-item";
 import { MONO_FONT, TimelineBadge } from "./timeline-badge";
-import { useAutoOpen } from "./use-auto-collapse";
+import { useAutoCollapse } from "./use-auto-collapse";
 import { useToggle } from "./use-toggle";
 
 const CODE_FONT_SIZE = 12;
@@ -21,10 +21,10 @@ const CODE_LINE_HEIGHT = 18;
  * Providers that report no patch (and every provider while the call still runs)
  * fall back to the first edit's old/new strings, which the row labels as such.
  */
-export function LiveEditRow({ item, theme, layout }: PluginTimelineItemProps<LiveEditData>) {
+export function LiveEditRow({ item, theme }: PluginTimelineItemProps<LiveEditData>) {
   const data = item.data;
   const running = data.status === "running";
-  const { expanded, toggle } = useToggle(useAutoOpen(running, layout.compact));
+  const { expanded, toggle } = useToggle(useAutoCollapse(running));
 
   const parsed = useMemo(() => parseDiff(data.diff), [data.diff]);
   const stat = useMemo(
@@ -78,7 +78,6 @@ export function LiveEditRow({ item, theme, layout }: PluginTimelineItemProps<Liv
     return (
       <DetailBlock
         theme={theme}
-        compact={layout.compact}
         meta={data.filePath}
         body={body}
         placeholder={running ? "Applying…" : "(no patch)"}
@@ -92,16 +91,7 @@ export function LiveEditRow({ item, theme, layout }: PluginTimelineItemProps<Liv
         errorText={data.errorText}
       />
     );
-  }, [
-    theme,
-    layout.compact,
-    body,
-    data.filePath,
-    data.synthesized,
-    data.truncated,
-    data.errorText,
-    running,
-  ]);
+  }, [theme, body, data.filePath, data.synthesized, data.truncated, data.errorText, running]);
 
   return (
     <TimelineBadge
@@ -114,7 +104,6 @@ export function LiveEditRow({ item, theme, layout }: PluginTimelineItemProps<Liv
       canceled={data.status === "canceled"}
       active={expanded}
       loading={running}
-      compact={layout.compact}
       expanded={expanded}
       onToggle={toggle}
       renderDetails={renderDetails}

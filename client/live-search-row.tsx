@@ -5,7 +5,7 @@ import type { LiveSearchData } from "../shared/live-search";
 import { DetailBlock } from "./detail-block";
 import { searchBody, searchMeta } from "./live-search-item";
 import { MONO_FONT, TimelineBadge } from "./timeline-badge";
-import { useAutoOpen } from "./use-auto-collapse";
+import { useAutoCollapse } from "./use-auto-collapse";
 import { useToggle } from "./use-toggle";
 
 const CODE_FONT_SIZE = 12;
@@ -18,10 +18,10 @@ const CODE_LINE_HEIGHT = 18;
  *
  * The header keeps the query, like the native row; the facts live in the block.
  */
-export function LiveSearchRow({ item, theme, layout }: PluginTimelineItemProps<LiveSearchData>) {
+export function LiveSearchRow({ item, theme }: PluginTimelineItemProps<LiveSearchData>) {
   const data = item.data;
   const running = data.status === "running";
-  const { expanded, toggle } = useToggle(useAutoOpen(running, layout.compact));
+  const { expanded, toggle } = useToggle(useAutoCollapse(running));
 
   const meta = useMemo(
     () =>
@@ -68,7 +68,6 @@ export function LiveSearchRow({ item, theme, layout }: PluginTimelineItemProps<L
     () => (
       <DetailBlock
         theme={theme}
-        compact={layout.compact}
         meta={meta}
         body={details}
         placeholder={running ? "Searching…" : "(no results)"}
@@ -76,7 +75,7 @@ export function LiveSearchRow({ item, theme, layout }: PluginTimelineItemProps<L
         errorText={data.errorText}
       />
     ),
-    [theme, layout.compact, meta, details, data.truncated, data.errorText, running],
+    [theme, meta, details, data.truncated, data.errorText, running],
   );
 
   return (
@@ -90,7 +89,6 @@ export function LiveSearchRow({ item, theme, layout }: PluginTimelineItemProps<L
       canceled={data.status === "canceled"}
       active={expanded}
       loading={running}
-      compact={layout.compact}
       expanded={expanded}
       onToggle={toggle}
       renderDetails={renderDetails}
