@@ -10,6 +10,8 @@ import { liveShellTimelineItem } from "./client/live-shell-item";
 import { LiveShellRow } from "./client/live-shell-row";
 import { liveThinkingTimelineItem } from "./client/live-thinking-item";
 import { LiveThinkingRow } from "./client/live-thinking-row";
+import { liveToolTimelineItem } from "./client/live-tool-item";
+import { LiveToolRow } from "./client/live-tool-row";
 import { LIVE_EDIT_KIND, LIVE_EDIT_VERSION, liveEditDataSchema } from "./shared/live-edit";
 import { LIVE_READ_KIND, LIVE_READ_VERSION, liveReadDataSchema } from "./shared/live-read";
 import { LIVE_SEARCH_KIND, LIVE_SEARCH_VERSION, liveSearchDataSchema } from "./shared/live-search";
@@ -19,17 +21,20 @@ import {
   LIVE_THINKING_VERSION,
   liveThinkingDataSchema,
 } from "./shared/live-thinking";
+import { LIVE_TOOL_KIND, LIVE_TOOL_VERSION, liveToolDataSchema } from "./shared/live-tool";
 
 /**
  * Replaces shell tool-call rows with a live view of their output, read / edit /
- * search rows with a live view of the file or results they touch, and reasoning
- * rows with a live view that expands while the model thinks and folds once the
- * thought is done.
+ * search rows with a live view of the file or results they touch, every other
+ * tool call (`write` / `fetch` / `sub_agent` / `plain_text` / `unknown`) with a
+ * live view of what it produced, and reasoning rows with a live view that
+ * expands while the model thinks and folds once the thought is done.
  *
  * Every other item returns `undefined` from a transformer, so Paseo keeps
  * rendering its own row. The host tries the transformers in registration order
- * and takes the first one that returns items, which is why shell / read / edit
- * / search can each own one transformer on the same `tool_call` item type.
+ * and takes the first one that returns items, which is why shell / read / edit /
+ * search / the rest can each own one transformer on the same `tool_call` item
+ * type.
  */
 export default function contribute(client: PluginClientContext): PluginCleanup {
   const cleanups = [
@@ -106,6 +111,21 @@ export default function contribute(client: PluginClientContext): PluginCleanup {
       version: LIVE_THINKING_VERSION,
       schema: liveThinkingDataSchema,
       Component: LiveThinkingRow,
+    }),
+
+    client.addTimelineTransformer({
+      id: "live-tool",
+      query: { itemType: "tool_call" },
+      transform({ item }) {
+        return liveToolTimelineItem(item);
+      },
+    }),
+
+    client.addTimelineRenderer({
+      kind: LIVE_TOOL_KIND,
+      version: LIVE_TOOL_VERSION,
+      schema: liveToolDataSchema,
+      Component: LiveToolRow,
     }),
   ];
 
