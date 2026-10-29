@@ -137,6 +137,19 @@ describe("readDetailToolCall", () => {
     expect(readDetailToolCall({ type: "tool_call", detail: null })).toBeUndefined();
   });
 
+  it("picks native's detail surface for the type", () => {
+    const surfaceOf = (detail: Record<string, unknown>, name = "tool") =>
+      readDetailToolCall(toolItem({ name, detail }))?.inset;
+    // Full-bleed `surface1`: native's `fullBleedBlock`.
+    expect(surfaceOf({ type: "write", filePath: "/a.ts", content: "x" })).toBeUndefined();
+    expect(surfaceOf({ type: "sub_agent", log: "x" }, "task")).toBeUndefined();
+    // Inset `surface2`: native's `scrollArea` / `jsonScroll`.
+    expect(surfaceOf({ type: "fetch", url: "https://x", result: "x" })).toBe(true);
+    expect(surfaceOf({ type: "plain_text", text: "x" }, "terminal")).toBe(true);
+    expect(surfaceOf({ type: "unknown", input: { a: 1 } }, "mcp__x")).toBe(true);
+    expect(surfaceOf({ type: "unknown", input: "hi" }, "say")).toBe(true);
+  });
+
   it("keeps a failure message", () => {
     const snapshot = readDetailToolCall(
       toolItem({ status: "failed", error: { message: "EACCES" } }),
@@ -212,6 +225,7 @@ describe("liveToolTimelineItem", () => {
     expect(Object.hasOwn(data, "truncated")).toBe(false);
     expect(Object.hasOwn(data, "meta")).toBe(false);
     expect(Object.hasOwn(data, "summaryIsPath")).toBe(false);
+    expect(Object.hasOwn(data, "inset")).toBe(false);
   });
 
   it("keeps the head of a huge section and flags the cut", () => {
@@ -227,6 +241,15 @@ describe("liveToolTimelineItem", () => {
     expect(roundTripped.truncated).toBe(true);
     expect(roundTripped.sections[0].text.split("\n")).toHaveLength(2_000);
     expect(roundTripped.sections[0].text.startsWith("line 0\n")).toBe(true);
+  });
+
+  it("carries the inset surface through to the renderer", () => {
+    const result = liveToolTimelineItem(
+      toolItem({ detail: { type: "fetch", url: "https://x", result: "r" } }),
+    );
+    const data = result?.items[0]?.data as Record<string, unknown>;
+    expect(data.inset).toBe(true);
+    expect(JSON.parse(JSON.stringify(data)).inset).toBe(true);
   });
 
   it("returns undefined for every tool call another row owns", () => {

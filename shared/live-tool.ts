@@ -35,6 +35,12 @@ export const liveToolDataSchema = z.object({
   status: liveStatusSchema,
   /** True when the transformer dropped the end of a section to keep it small. */
   truncated: z.boolean().optional(),
+  /**
+   * True when native renders this detail in an inset `surface2` block (`fetch`,
+   * `plain_text`, `unknown`) rather than the full-bleed one (`write`,
+   * `sub_agent`).
+   */
+  inset: z.boolean().optional(),
   errorText: z.string().optional(),
 });
 

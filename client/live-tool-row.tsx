@@ -25,6 +25,9 @@ const CODE_LINE_HEIGHT = 18;
 export function LiveToolRow({ item, theme }: PluginTimelineItemProps<LiveToolData>) {
   const data = item.data;
   const running = data.status === "running";
+  // Native paints these details two ways: `write` / `sub_agent` are full-bleed
+  // `surface1`, while `fetch` / `plain_text` / `unknown` sit in the inset box.
+  const inset = data.inset === true;
   const { expanded, toggle } = useToggle(useAutoCollapse(running));
 
   const summary = useMemo(
@@ -73,6 +76,7 @@ export function LiveToolRow({ item, theme }: PluginTimelineItemProps<LiveToolDat
     () => (
       <DetailBlock
         theme={theme}
+        inset={inset}
         meta={data.meta}
         body={body}
         placeholder={running ? "Waiting for the tool…" : "(no details)"}
@@ -80,7 +84,7 @@ export function LiveToolRow({ item, theme }: PluginTimelineItemProps<LiveToolDat
         errorText={data.errorText}
       />
     ),
-    [theme, data.meta, body, data.truncated, data.errorText, running],
+    [theme, data.meta, body, data.truncated, data.errorText, running, inset],
   );
 
   return (
@@ -94,6 +98,7 @@ export function LiveToolRow({ item, theme }: PluginTimelineItemProps<LiveToolDat
       canceled={data.status === "canceled"}
       active={expanded}
       loading={running}
+      insetDetail={inset}
       expanded={expanded}
       onToggle={toggle}
       renderDetails={renderDetails}

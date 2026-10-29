@@ -4,6 +4,10 @@ import { ScrollView, Text, View } from "react-native";
 import {
   CODE_LINE_STYLE,
   DETAIL_HORIZONTAL_CONTENT_STYLE,
+  DETAIL_INSET_BORDER,
+  DETAIL_INSET_CODE_LINE_STYLE,
+  DETAIL_INSET_CONTENT_STYLE,
+  DETAIL_INSET_TEXT_STYLE,
   DETAIL_TEXT_STYLE,
   DETAIL_VERTICAL_CONTENT_STYLE,
   MONO_FONT,
@@ -26,6 +30,12 @@ export interface DetailBlockProps {
   /** Muted line under the content, e.g. what the transformer dropped. */
   footnote?: string;
   errorText?: string;
+  /**
+   * Native's inset code surface: the read / search / fetch / plain-text /
+   * unknown blocks sit in a bordered `surface2` box (`scrollArea`), while shell
+   * / edit / write / sub-agent are full-bleed `surface1` and pass `false`.
+   */
+  inset?: boolean;
 }
 
 /**
@@ -47,59 +57,56 @@ export const DetailBlock = memo(function DetailBlock({
   placeholder,
   footnote,
   errorText,
+  inset = false,
 }: DetailBlockProps) {
-  const styles = useMemo(
-    () => ({
-      scroll: { maxHeight: DETAIL_MAX_HEIGHT },
+  const styles = useMemo(() => {
+    const mono = {
+      fontFamily: MONO_FONT,
+      fontSize: CODE_FONT_SIZE,
+      lineHeight: CODE_LINE_HEIGHT,
+    };
+    // An inset block carries its horizontal padding on the scroll content, so
+    // its lines only add the vertical one the full-bleed block already has.
+    const textStyle = inset ? DETAIL_INSET_TEXT_STYLE : DETAIL_TEXT_STYLE;
+    return {
+      scroll: [
+        { maxHeight: DETAIL_MAX_HEIGHT },
+        inset
+          ? {
+              ...DETAIL_INSET_BORDER,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surface2,
+              overflow: "hidden" as const,
+            }
+          : null,
+      ],
+      verticalContent: inset ? DETAIL_INSET_CONTENT_STYLE : DETAIL_VERTICAL_CONTENT_STYLE,
+      horizontalContent: inset ? undefined : DETAIL_HORIZONTAL_CONTENT_STYLE,
+      codeLine: inset ? DETAIL_INSET_CODE_LINE_STYLE : CODE_LINE_STYLE,
       row: {
         flexDirection: "row" as const,
         alignItems: "flex-start" as const,
       },
       gutter: {
-        paddingLeft: 12,
-        paddingTop: 12,
-        fontFamily: MONO_FONT,
-        fontSize: CODE_FONT_SIZE,
-        lineHeight: CODE_LINE_HEIGHT,
+        // Full-bleed: the gutter matches the code line's own 12px padding.
+        // Inset: the content container already pads, so it only lines up.
+        paddingLeft: inset ? 0 : 12,
+        paddingTop: inset ? 0 : 12,
+        ...mono,
         color: theme.colors.foregroundMuted,
         textAlign: "right" as const,
       },
       content: { flexShrink: 1, minWidth: 0 },
-      meta: [
-        DETAIL_TEXT_STYLE,
-        {
-          fontFamily: MONO_FONT,
-          fontSize: CODE_FONT_SIZE,
-          lineHeight: CODE_LINE_HEIGHT,
-          color: theme.colors.foregroundMuted,
-        },
-      ],
-      placeholder: [
-        DETAIL_TEXT_STYLE,
-        {
-          fontFamily: MONO_FONT,
-          fontSize: CODE_FONT_SIZE,
-          lineHeight: CODE_LINE_HEIGHT,
-          color: theme.colors.foregroundMuted,
-        },
-      ],
-      error: [
-        DETAIL_TEXT_STYLE,
-        {
-          fontFamily: MONO_FONT,
-          fontSize: CODE_FONT_SIZE,
-          lineHeight: CODE_LINE_HEIGHT,
-          color: theme.colors.statusDanger,
-        },
-      ],
-    }),
-    [theme],
-  );
+      meta: [textStyle, { ...mono, color: theme.colors.foregroundMuted }],
+      placeholder: [textStyle, { ...mono, color: theme.colors.foregroundMuted }],
+      error: [textStyle, { ...mono, color: theme.colors.statusDanger }],
+    };
+  }, [theme, inset]);
 
   return (
     <ScrollView
       style={styles.scroll}
-      contentContainerStyle={DETAIL_VERTICAL_CONTENT_STYLE}
+      contentContainerStyle={styles.verticalContent}
       nestedScrollEnabled
       showsVerticalScrollIndicator
     >
@@ -118,9 +125,9 @@ export const DetailBlock = memo(function DetailBlock({
             nestedScrollEnabled
             showsHorizontalScrollIndicator
             style={styles.content}
-            contentContainerStyle={DETAIL_HORIZONTAL_CONTENT_STYLE}
+            contentContainerStyle={styles.horizontalContent}
           >
-            <View style={CODE_LINE_STYLE}>{body}</View>
+            <View style={styles.codeLine}>{body}</View>
           </ScrollView>
         </View>
       )}

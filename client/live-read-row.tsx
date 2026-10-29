@@ -64,6 +64,7 @@ export function LiveReadRow({ item, theme }: PluginTimelineItemProps<LiveReadDat
     () => (
       <DetailBlock
         theme={theme}
+        inset
         meta={range}
         gutter={gutter}
         body={body}
@@ -86,6 +87,7 @@ export function LiveReadRow({ item, theme }: PluginTimelineItemProps<LiveReadDat
       canceled={data.status === "canceled"}
       active={expanded}
       loading={running}
+      insetDetail
       expanded={expanded}
       onToggle={toggle}
       renderDetails={renderDetails}

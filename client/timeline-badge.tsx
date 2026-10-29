@@ -10,7 +10,7 @@ import { Platform, Pressable, Text, View } from "react-native";
  * the numbers live here.
  */
 const SPACING = { 1: 4, 2: 8, 3: 12, 4: 16 } as const;
-const RADIUS = { lg: 8 } as const;
+const RADIUS = { base: 4, lg: 8 } as const;
 const FONT_SIZE = { base: 14 } as const;
 /** The timeline row insets its content by 13px; the native badge bleeds back out. */
 const TIMELINE_HORIZONTAL_INSET = 13;
@@ -44,6 +44,22 @@ export const DETAIL_TEXT_STYLE = {
   paddingHorizontal: DETAIL_PADDING,
   paddingVertical: SPACING[1],
 } as const;
+/**
+ * Native's inset code surface — `scrollArea` and `jsonScroll` in
+ * `tool-call-details.tsx`: a `surface2` box with a hairline border and
+ * `borderRadius.base` (4), unlike the full-bleed `surface1` block that shell /
+ * edit / write / sub-agent use.
+ */
+export const DETAIL_INSET_BORDER = {
+  borderWidth: 1,
+  borderRadius: RADIUS.base,
+} as const;
+/** Native's inset code surface pads its content container on every side (`scrollContent`). */
+export const DETAIL_INSET_CONTENT_STYLE = { padding: DETAIL_PADDING } as const;
+/** The body of an inset block sits directly in that padding, so it adds none of its own. */
+export const DETAIL_INSET_CODE_LINE_STYLE = { minWidth: "100%" as const } as const;
+/** A line inside an inset block: the container already carries the horizontal padding. */
+export const DETAIL_INSET_TEXT_STYLE = { paddingVertical: SPACING[1] } as const;
 
 const ROTATE_CLOSED = { transform: [{ scale: 1.3 }] } as const;
 const ROTATE_OPEN = { transform: [{ scale: 1.3 }, { rotate: "90deg" }] } as const;
@@ -64,6 +80,11 @@ interface TimelineBadgeProps {
   active: boolean;
   /** Dims the label the way native rows do while a call is still in flight. */
   loading?: boolean;
+  /**
+   * The detail block paints its own inset surface (`surface2`), so the wrapper
+   * stays transparent — native leaves it without a background too.
+   */
+  insetDetail?: boolean;
   expanded: boolean;
   onToggle: () => void;
   /** Detail block content, built only while expanded. */
@@ -88,6 +109,7 @@ export const TimelineBadge = memo(function TimelineBadge({
   canceled = false,
   active,
   loading = false,
+  insetDetail = false,
   expanded,
   onToggle,
   renderDetails,
@@ -168,13 +190,13 @@ export const TimelineBadge = memo(function TimelineBadge({
         borderColor: theme.colors.border,
         borderBottomLeftRadius: RADIUS.lg,
         borderBottomRightRadius: RADIUS.lg,
-        backgroundColor: theme.colors.surface1,
+        backgroundColor: insetDetail ? "transparent" : theme.colors.surface1,
         overflow: "hidden" as const,
         flexShrink: 1,
         minWidth: 0,
       },
     }),
-    [theme],
+    [theme, insetDetail],
   );
 
   const pressableStyle = useMemo(

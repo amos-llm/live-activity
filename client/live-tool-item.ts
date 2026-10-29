@@ -17,6 +17,11 @@ export interface LiveToolSnapshot {
   meta?: string;
   sections: LiveToolSection[];
   status: LiveStatus;
+  /**
+   * Native's detail surface for this type: `fetch`, `plain_text` and `unknown`
+   * sit in an inset `surface2` block; `write` and `sub_agent` are full bleed.
+   */
+  inset?: boolean;
   errorText?: string;
 }
 
@@ -115,6 +120,7 @@ function fetchToolCall(detail: Record<string, unknown>): Partial<LiveToolSnapsho
     summary: url,
     meta: url === "" ? undefined : url,
     sections: result === "" ? [] : [{ text: result }],
+    inset: true,
   };
 }
 
@@ -144,6 +150,7 @@ function plainTextToolCall(
     icon: (named !== undefined ? NAMED_ICONS[named] : undefined) ?? DETAIL_ICONS.plain_text,
     summary: asString(detail.label) ?? "",
     sections: text === "" ? [] : [{ text: text }],
+    inset: true,
   };
 }
 
@@ -161,6 +168,7 @@ function unknownToolCall(
       icon: DETAIL_ICONS.unknown,
       summary: "",
       sections: trimEdges(input) === "" ? [] : [{ text: trimEdges(input) }],
+      inset: true,
     };
   }
 
@@ -174,6 +182,7 @@ function unknownToolCall(
     icon: isTask ? "Bot" : DETAIL_ICONS.unknown,
     summary: "",
     sections,
+    inset: true,
   };
 }
 
@@ -215,6 +224,7 @@ export function readDetailToolCall(item: unknown): LiveToolSnapshot | undefined 
     meta: snapshot.meta,
     sections: snapshot.sections ?? [],
     status: readStatus(record.status),
+    inset: snapshot.inset,
     errorText: describeError(record.error),
   };
 }
@@ -249,6 +259,7 @@ export function liveToolTimelineItem(item: unknown) {
   };
   if (snapshot.summaryIsPath) data.summaryIsPath = true;
   if (snapshot.meta !== undefined && snapshot.meta !== "") data.meta = snapshot.meta;
+  if (snapshot.inset) data.inset = true;
   if (snapshot.errorText !== undefined) data.errorText = snapshot.errorText;
   if (truncated) data.truncated = true;
 

@@ -68,6 +68,7 @@ export function LiveSearchRow({ item, theme }: PluginTimelineItemProps<LiveSearc
     () => (
       <DetailBlock
         theme={theme}
+        inset
         meta={meta}
         body={details}
         placeholder={running ? "Searching…" : "(no results)"}
@@ -89,6 +90,7 @@ export function LiveSearchRow({ item, theme }: PluginTimelineItemProps<LiveSearc
       canceled={data.status === "canceled"}
       active={expanded}
       loading={running}
+      insetDetail
       expanded={expanded}
       onToggle={toggle}
       renderDetails={renderDetails}
