@@ -89,13 +89,26 @@ Search row (auto-expanded; the header keeps the query, the block the matches):
 
 In every case you can click to see the full content.
 
+On a phone (a compact layout) a row does not expand in place: it stays a badge and a tap opens the details in Paseo's **bottom sheet**, the same surface native tool-call rows use — title, tool glyph and a close button in the header, the detail block filling the rest:
+
+```
+▸ Shell  npm run build          ← tap
+┌──────────────────────────────────────┐
+│  ⌗  Shell                          ✕ │
+├──────────────────────────────────────┤
+│ $ npm run build                      │
+│ compiled 128 modules in 1.2s         │
+│                                      │
+└──────────────────────────────────────┘
+```
+
 ## Behavior details
 
-- **A row expands by itself while its content is still growing or arriving** — the shell command while it runs, the file while it is read, the patch while it is applied, the results while the search runs, the thought while the model thinks — and auto-collapses 5s after it ends; clicking toggles it manually (once you click, that row follows you and no longer changes automatically). Rows mounted already finished start collapsed.
-- When expanded, the row header takes a `surface1` background and joins the detail block below into one unit; when collapsed it is **completely borderless** (matching the native badge).
+- **A row expands by itself while its content is still growing or arriving** — the shell command while it runs, the file while it is read, the patch while it is applied, the results while the search runs, the thought while the model thinks — and auto-collapses 5s after it ends; clicking toggles it manually (once you click, that row follows you and no longer changes automatically). Rows mounted already finished start collapsed. On a compact layout a row never opens itself: opening means a bottom sheet, and a sheet that covers the timeline the reader is watching is not something native rows do either — there the row only dims its label while it is live, and the sheet is opened by the reader.
+- When expanded, the row header takes a `surface1` background and joins the detail block below into one unit; when collapsed it is **completely borderless** (matching the native badge). A compact row is **always** borderless, even while its sheet is open: the open surface is the sheet, not the row.
 - Status is shown by icon only in the header, never by word (no `failed` / `canceled`): `TriangleAlert` (danger) on failure, `Ban` (muted) when canceled. The detail block carries the facts instead — a non-zero-safe `exit N` line and the error message, both only visible once expanded. Other icons use their lucide names: `SquareTerminal` for shell, `Eye` for read, `Pencil` for edit, `Search` for search, `Brain` for thinking, and a 90°-rotated `ChevronRight` on hover/expand (natively the arrow only appears on hover).
 - While running, the command wraps across as many lines as it needs; once the command ends, the collapsed row keeps it on **one line with a trailing ellipsis**.
-- The detail block is the native one: a **capped vertical scroll** (400px, 260px on a compact layout) around a horizontal scroll for unwrapped lines, so a chatty build never pushes the timeline off screen. Its content is the command and output in one monospace block prefixed by a muted `$ `.
+- The detail block is the native one: a **capped vertical scroll** (400px) around a horizontal scroll for unwrapped lines, so a chatty build never pushes the timeline off screen. Its content is the command and output in one monospace block prefixed by a muted `$ `. In the compact bottom sheet the block drops the cap and fills the sheet instead, which is the sheet's own bound.
 - The shell row keeps the block on the **newest** output while the command is still writing, with the same rule as the thinking row below: only while you are at the bottom, only an **upward** scroll stops it, and scrolling back down (or reopening the row) resumes it. A finished command is **history**: expanding it starts at the top, so you read it from the command line down.
 - The thinking row expands while streaming and keeps its detail block on the **newest** text — but only while you are **at the bottom** of it. Scroll up and the row stops moving on its own: the stream keeps appending below and your view stays where you left it. Scroll back to the bottom and the follow resumes; opening the row again after it collapsed re-arms it. A thought that had already completed when you opened it is **history** and starts at the top. Only an **upward** scroll stops the follow: the block is scrolled and measured a frame after the text lands (and the web client re-reads the node 100ms after scrolling goes idle), so an event that merely reports a content size that grew past the row's own scroll is not the reader moving, and must not freeze the row mid-stream. Every follow scrolls twice — now and one frame later — because the content size change can arrive before the new text is laid out. The follow lasts one chunk past the end, because the last chunk arrives together with the `complete` phase. A few seconds after the thought completes it folds back to one line. The collapsed header keeps the **beginning** of the thought (220 characters, 120 on a compact layout), which identifies what was thought; the scan stops once the line is full, so a long thought costs no more than a short one.
 - Output is **clamped by the transformer** to the tail (2000 lines / 50 KB, like the providers do), and the detail block says so when the head was dropped. Providers such as pi already truncate; this keeps a provider that doesn't from pushing megabytes through the timeline on every streaming update.
@@ -118,7 +131,8 @@ mono: SFMono-Regular, Menlo, Monaco, Consolas, … / ui-monospace
 
 Behavior matched to the native badge as well:
 
-- `memo`ized like native, and the detail block is built by a callback, so a collapsed row never renders it (a streaming collapsed row whose summary did not change does not re-render at all).
+- `memo`ized like native, and the detail block is built by a callback, so a collapsed row never renders it (a streaming collapsed row whose summary did not change does not re-render at all). A closed sheet builds nothing either.
+- On a compact layout the badge follows native's compact `ToolCall` (`inline = !compact`): `isExpanded` is never true, so the label stays at rest, and the tap opens the sheet instead of toggling the row. Native does the same, which is why the two look identical on a phone until you tap.
 - `accessibilityState={{ expanded }}` on the pressable, plus press feedback (`opacity: 0.9`).
 - The label is muted at rest, foreground when active (hover or expanded), and at `opacity: 0.72` while a call is still in flight.
 - One `spacing[1]` gap under each row.
@@ -130,9 +144,10 @@ The plugin cannot read `theme.spacing` / `theme.fontSize`, so these values are h
 ```
 
 index.client.tsx registers 5 transformers + 5 renderers
-client/timeline-badge.tsx shared badge: native tokens + styles + icon slot (every row uses it)
-client/detail-block.tsx shared detail block: capped vertical scroll, optional line-number gutter, meta / footnote / error lines
-client/use-auto-collapse.ts open while active, fold 5s after it ends (every row)
+client/timeline-badge.tsx shared badge: native tokens + styles + icon slot (every row uses it); on a compact layout it renders the sheet instead of an inline block
+client/detail-sheet.tsx shared compact-layout bottom sheet: the host `Modal` with the row's label and glyph, the detail block filling it
+client/detail-block.tsx shared detail block: capped vertical scroll (or sheet-filling), optional line-number gutter, meta / footnote / error lines
+client/use-auto-collapse.ts open while active, fold 5s after it ends (every row); `useAutoOpen()` keeps a compact row from opening itself
 client/use-pinned-scroll.ts follow the newest content only while the reader is at the bottom; only an upward scroll stops it (isPinnedToBottom + resolvePinned tested); shell and thinking use it
 client/use-toggle.ts expand state: follows "is active", then follows the user once clicked
 client/clamp-output.ts keepOutputTail() for shell output / keepOutputHead() for reads, patches and results (tested)
@@ -196,5 +211,5 @@ A directory install remembers the path and the daemon loads from it on every sta
 - The edit diff is colored text, not the native `DiffViewer`: git-style patches keep their `@@` hunks as muted lines and show no line-number gutter (pi's patches carry their own numbers in the text).
 - Web results in the search row are plain text, not links.
 - The label shimmer native rows show while a call is loading is not reproduced: it needs the host's text measurement and gradient layers. Streaming rows use the color/opacity treatment, and `Thinking`/`Thought` carry the state.
-- On a compact layout native opens tool-call details in a bottom sheet; this plugin always renders them inline (with a smaller 260px cap and a shorter thinking line) because plugins cannot open that sheet.
+- On a compact layout the details are the host's `Modal` sheet (65% / 90% snap points), not native's `ToolCallSheetModal` (60% / 95%): a plugin gets the host's generic sheet, so the snap points, the handle and the backdrop are the host's, and the sheet header carries the row's own label plus the tool glyph.
 - `isLastInSequence` spacing (`spacing[4]` under the last row of a sequence) is host-internal, so every row gets the normal `spacing[1]` gap.

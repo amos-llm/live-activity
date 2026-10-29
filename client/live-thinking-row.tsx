@@ -3,14 +3,13 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { ScrollView, Text } from "react-native";
 import type { LiveThinkingData } from "../shared/live-thinking";
 import { liveThinkingLine } from "./live-thinking-item";
-import { CODE_LINE_STYLE, TimelineBadge, UI_FONT } from "./timeline-badge";
-import { useAutoCollapse } from "./use-auto-collapse";
+import { CODE_LINE_STYLE, DETAIL_FILL_STYLE, TimelineBadge, UI_FONT } from "./timeline-badge";
+import { useAutoOpen } from "./use-auto-collapse";
 import { usePinnedScroll } from "./use-pinned-scroll";
 import { useToggle } from "./use-toggle";
 
-/** Native detail blocks cap their scroll area at 400px; a compact layout gets less. */
+/** Native detail blocks cap their scroll area at 400px. */
 const DETAIL_MAX_HEIGHT = 400;
-const DETAIL_MAX_HEIGHT_COMPACT = 260;
 /** Characters kept in the one-line summary. */
 const SUMMARY_CHARS = 220;
 const SUMMARY_CHARS_COMPACT = 120;
@@ -28,7 +27,7 @@ export function LiveThinkingRow({
   layout,
 }: PluginTimelineItemProps<LiveThinkingData>) {
   const data = item.data;
-  const { expanded, toggle } = useToggle(useAutoCollapse(data.streaming));
+  const { expanded, toggle } = useToggle(useAutoOpen(data.streaming, layout.compact));
   const { ref: scrollRef, follow, reset, onScroll } = usePinnedScroll();
   // A thought that is already committed when the row opens is history and
   // starts at the top; a thought that was live when it opened keeps following
@@ -38,7 +37,7 @@ export function LiveThinkingRow({
 
   const styles = useMemo(
     () => ({
-      scroll: { maxHeight: layout.compact ? DETAIL_MAX_HEIGHT_COMPACT : DETAIL_MAX_HEIGHT },
+      scroll: layout.compact ? DETAIL_FILL_STYLE : { maxHeight: DETAIL_MAX_HEIGHT },
       text: {
         fontFamily: UI_FONT,
         fontSize: 14,
@@ -102,6 +101,7 @@ export function LiveThinkingRow({
       summary={summary}
       summaryLines={1}
       active={data.streaming || expanded}
+      compact={layout.compact}
       expanded={expanded}
       onToggle={toggle}
       renderDetails={renderDetails}

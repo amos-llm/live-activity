@@ -1,7 +1,8 @@
 import type { PluginTheme } from "@getpaseo/plugin";
-import { Icon } from "@getpaseo/plugin/client/react-native";
+import { Icon } from "@getpaseo/plugin/client/ui";
 import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
+import { DetailSheet } from "./detail-sheet";
 
 /**
  * Token values copied from Paseo's own theme (`packages/app/src/styles/theme.ts`)
@@ -44,6 +45,11 @@ export const DETAIL_TEXT_STYLE = {
   paddingHorizontal: DETAIL_PADDING,
   paddingVertical: SPACING[1],
 } as const;
+/**
+ * A compact-layout detail block lives in the bottom sheet, which already bounds
+ * its height: the block fills the sheet instead of capping its own scroll area.
+ */
+export const DETAIL_FILL_STYLE = { flex: 1 } as const;
 
 const ROTATE_CLOSED = { transform: [{ scale: 1.3 }] } as const;
 const ROTATE_OPEN = { transform: [{ scale: 1.3 }, { rotate: "90deg" }] } as const;
@@ -64,6 +70,11 @@ interface TimelineBadgeProps {
   active: boolean;
   /** Dims the label the way native rows do while a call is still in flight. */
   loading?: boolean;
+  /**
+   * Compact layout: the row is only the trigger for the detail sheet, which is
+   * what native does on a phone. Never renders the block inline.
+   */
+  compact: boolean;
   expanded: boolean;
   onToggle: () => void;
   /** Detail block content, built only while expanded. */
@@ -72,7 +83,8 @@ interface TimelineBadgeProps {
 
 /**
  * Paseo's native expandable tool-call badge: borderless while collapsed, and a
- * header attached to a bordered detail block once expanded.
+ * header attached to a bordered detail block once expanded. On a compact layout
+ * it is only the trigger for the host's bottom sheet, and stays borderless.
  *
  * Memoized like the native badge. The detail block is produced by a callback so
  * a collapsed row never builds it, which is what lets the memo skip streaming
@@ -88,6 +100,7 @@ export const TimelineBadge = memo(function TimelineBadge({
   canceled = false,
   active,
   loading = false,
+  compact,
   expanded,
   onToggle,
   renderDetails,
@@ -177,41 +190,67 @@ export const TimelineBadge = memo(function TimelineBadge({
     [theme],
   );
 
+  // Native keeps a compact badge at rest: the sheet is the surface that is open,
+  // not the row, so the header never takes the expanded treatment.
+  const headerActive = compact ? false : active;
+  const headerExpanded = !compact && expanded;
+
   const pressableStyle = useMemo(
     () => [
       styles.pressable,
       pressed ? styles.pressablePressed : null,
-      expanded ? styles.pressableExpanded : null,
+      headerExpanded ? styles.pressableExpanded : null,
     ],
-    [styles, pressed, expanded],
+    [styles, pressed, headerExpanded],
   );
   const labelStyle = useMemo(
-    () => [styles.label, active ? styles.labelActive : null, loading ? styles.labelLoading : null],
-    [styles, active, loading],
+    () => [
+      styles.label,
+      headerActive ? styles.labelActive : null,
+      loading ? styles.labelLoading : null,
+    ],
+    [styles, headerActive, loading],
   );
   const summaryStyle = useMemo(
-    () => [styles.summary, active ? styles.summaryActive : null],
-    [styles, active],
+    () => [styles.summary, headerActive ? styles.summaryActive : null],
+    [styles, headerActive],
   );
   const chevronStyle = useMemo(
-    () => [styles.chevronNudge, expanded ? ROTATE_OPEN : ROTATE_CLOSED],
-    [styles, expanded],
+    () => [styles.chevronNudge, headerExpanded ? ROTATE_OPEN : ROTATE_CLOSED],
+    [styles, headerExpanded],
   );
-  const accessibilityState = useMemo(() => ({ expanded }), [expanded]);
+  const accessibilityState = useMemo(() => ({ expanded: headerExpanded }), [headerExpanded]);
+  const accessibilityLabel = compact
+    ? `Open ${label} details`
+    : expanded
+      ? `Collapse ${label}`
+      : `Expand ${label}`;
 
   // Native behavior: the tool icon while idle, a rotating chevron on hover or
   // while expanded.
-  const showChevron = hovered || expanded;
-  const iconColor = active ? theme.colors.foreground : theme.colors.foregroundMuted;
-  const detailContent = expanded && renderDetails ? renderDetails() : null;
+  const showChevron = hovered || headerExpanded;
+  const iconColor = headerActive ? theme.colors.foreground : theme.colors.foregroundMuted;
+  const detailContent = headerExpanded && renderDetails ? renderDetails() : null;
+  const sheetContent = compact && expanded && renderDetails ? renderDetails() : null;
+
+  // The sheet is mounted on first open and stays mounted, so its dismissal can
+  // animate; a row nobody opened carries no sheet at all. `expanded` alone keeps
+  // it mounted too, for the case where the window is resized into a compact
+  // layout while the row is open inline.
+  const [sheetOpened, setSheetOpened] = useState(false);
+  const sheetMounted = compact && (expanded || sheetOpened);
+  const onPress = useCallback(() => {
+    if (compact) setSheetOpened(true);
+    onToggle();
+  }, [compact, onToggle]);
 
   return (
     <View style={styles.container}>
       <Pressable
         accessibilityRole="button"
         accessibilityState={accessibilityState}
-        accessibilityLabel={expanded ? `Collapse ${label}` : `Expand ${label}`}
-        onPress={onToggle}
+        accessibilityLabel={accessibilityLabel}
+        onPress={onPress}
         onPressIn={onPressIn}
         onPressOut={onPressOut}
         onHoverIn={onHoverIn}
@@ -248,6 +287,11 @@ export const TimelineBadge = memo(function TimelineBadge({
       </Pressable>
 
       {detailContent ? <View style={styles.detailWrapper}>{detailContent}</View> : null}
+      {sheetMounted ? (
+        <DetailSheet theme={theme} icon={icon} title={label} open={expanded} onClose={onToggle}>
+          {sheetContent}
+        </DetailSheet>
+      ) : null}
     </View>
   );
 });

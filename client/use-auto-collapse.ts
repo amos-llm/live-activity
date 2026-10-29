@@ -39,3 +39,17 @@ export function useAutoCollapse(active: boolean, delayMs = AUTO_COLLAPSE_DELAY_M
   /* eslint-enable react/set-state-in-effect */
   return active || holdingOpen;
 }
+
+/**
+ * Whether a row opens itself because its content is still arriving.
+ *
+ * Rows expand themselves while they are live — that is the point of this
+ * plugin — but on a compact layout expanding means opening the host's bottom
+ * sheet, and a sheet that opens by itself would cover the timeline the reader is
+ * watching. Native rows never open by themselves either, so on a phone the
+ * reader is the one who opens the sheet; the row only reports that it is live
+ * (`loading`) until they do.
+ */
+export function useAutoOpen(active: boolean, compact: boolean): boolean {
+  return useAutoCollapse(active && !compact);
+}

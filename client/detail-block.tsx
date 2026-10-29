@@ -3,15 +3,15 @@ import { memo, useMemo, type ReactNode } from "react";
 import { ScrollView, Text, View } from "react-native";
 import {
   CODE_LINE_STYLE,
+  DETAIL_FILL_STYLE,
   DETAIL_HORIZONTAL_CONTENT_STYLE,
   DETAIL_TEXT_STYLE,
   DETAIL_VERTICAL_CONTENT_STYLE,
   MONO_FONT,
 } from "./timeline-badge";
 
-/** Native detail blocks cap their scroll area at 400px; a compact layout gets less. */
+/** Native detail blocks cap their scroll area at 400px. */
 const DETAIL_MAX_HEIGHT = 400;
-const DETAIL_MAX_HEIGHT_COMPACT = 260;
 const CODE_FONT_SIZE = 12;
 const CODE_LINE_HEIGHT = 18;
 
@@ -53,7 +53,7 @@ export const DetailBlock = memo(function DetailBlock({
 }: DetailBlockProps) {
   const styles = useMemo(
     () => ({
-      scroll: { maxHeight: compact ? DETAIL_MAX_HEIGHT_COMPACT : DETAIL_MAX_HEIGHT },
+      scroll: compact ? DETAIL_FILL_STYLE : { maxHeight: DETAIL_MAX_HEIGHT },
       row: {
         flexDirection: "row" as const,
         alignItems: "flex-start" as const,

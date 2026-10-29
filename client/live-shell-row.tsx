@@ -4,20 +4,20 @@ import { ScrollView, Text, View } from "react-native";
 import type { LiveShellData } from "../shared/live-shell";
 import {
   CODE_LINE_STYLE,
+  DETAIL_FILL_STYLE,
   DETAIL_HORIZONTAL_CONTENT_STYLE,
   DETAIL_TEXT_STYLE,
   DETAIL_VERTICAL_CONTENT_STYLE,
   MONO_FONT,
   TimelineBadge,
 } from "./timeline-badge";
-import { useAutoCollapse } from "./use-auto-collapse";
+import { useAutoOpen } from "./use-auto-collapse";
 import { usePinnedScroll } from "./use-pinned-scroll";
 import { useToggle } from "./use-toggle";
 
 const CODE_LINE_HEIGHT = 18;
-/** Native detail blocks cap their scroll area at 400px; a compact layout gets less. */
+/** Native detail blocks cap their scroll area at 400px. */
 const DETAIL_MAX_HEIGHT = 400;
-const DETAIL_MAX_HEIGHT_COMPACT = 260;
 
 /**
  * Shell row: opens itself while the command runs, collapses when it ends, and
@@ -35,7 +35,7 @@ export function LiveShellRow({ item, theme, layout }: PluginTimelineItemProps<Li
   const running = data.status === "running";
   // Hold the row open for a grace period after the command finishes so the
   // final output stays readable before the auto-collapse.
-  const { expanded, toggle } = useToggle(useAutoCollapse(running));
+  const { expanded, toggle } = useToggle(useAutoOpen(running, layout.compact));
   const { ref: scrollRef, follow, reset, onScroll } = usePinnedScroll();
   // A row that opens on a finished command is history and starts at the top;
   // a row that was live when it opened keeps following to the last chunk, which
@@ -46,7 +46,7 @@ export function LiveShellRow({ item, theme, layout }: PluginTimelineItemProps<Li
 
   const styles = useMemo(
     () => ({
-      scroll: { maxHeight: layout.compact ? DETAIL_MAX_HEIGHT_COMPACT : DETAIL_MAX_HEIGHT },
+      scroll: layout.compact ? DETAIL_FILL_STYLE : { maxHeight: DETAIL_MAX_HEIGHT },
       text: {
         fontFamily: MONO_FONT,
         fontSize: 12,
@@ -163,6 +163,7 @@ export function LiveShellRow({ item, theme, layout }: PluginTimelineItemProps<Li
       canceled={data.status === "canceled"}
       active={expanded}
       loading={running}
+      compact={layout.compact}
       expanded={expanded}
       onToggle={toggle}
       renderDetails={renderDetails}

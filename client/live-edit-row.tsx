@@ -6,7 +6,7 @@ import { DetailBlock } from "./detail-block";
 import { MAX_SUMMARY_PATH_CHARS, shortenPath } from "./file-path";
 import { diffStat, parseDiff, type DiffLineKind } from "./live-edit-item";
 import { MONO_FONT, TimelineBadge } from "./timeline-badge";
-import { useAutoCollapse } from "./use-auto-collapse";
+import { useAutoOpen } from "./use-auto-collapse";
 import { useToggle } from "./use-toggle";
 
 const CODE_FONT_SIZE = 12;
@@ -24,7 +24,7 @@ const CODE_LINE_HEIGHT = 18;
 export function LiveEditRow({ item, theme, layout }: PluginTimelineItemProps<LiveEditData>) {
   const data = item.data;
   const running = data.status === "running";
-  const { expanded, toggle } = useToggle(useAutoCollapse(running));
+  const { expanded, toggle } = useToggle(useAutoOpen(running, layout.compact));
 
   const parsed = useMemo(() => parseDiff(data.diff), [data.diff]);
   const stat = useMemo(
@@ -114,6 +114,7 @@ export function LiveEditRow({ item, theme, layout }: PluginTimelineItemProps<Liv
       canceled={data.status === "canceled"}
       active={expanded}
       loading={running}
+      compact={layout.compact}
       expanded={expanded}
       onToggle={toggle}
       renderDetails={renderDetails}

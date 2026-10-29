@@ -5,7 +5,7 @@ import type { LiveSearchData } from "../shared/live-search";
 import { DetailBlock } from "./detail-block";
 import { searchBody, searchMeta } from "./live-search-item";
 import { MONO_FONT, TimelineBadge } from "./timeline-badge";
-import { useAutoCollapse } from "./use-auto-collapse";
+import { useAutoOpen } from "./use-auto-collapse";
 import { useToggle } from "./use-toggle";
 
 const CODE_FONT_SIZE = 12;
@@ -21,7 +21,7 @@ const CODE_LINE_HEIGHT = 18;
 export function LiveSearchRow({ item, theme, layout }: PluginTimelineItemProps<LiveSearchData>) {
   const data = item.data;
   const running = data.status === "running";
-  const { expanded, toggle } = useToggle(useAutoCollapse(running));
+  const { expanded, toggle } = useToggle(useAutoOpen(running, layout.compact));
 
   const meta = useMemo(
     () =>
@@ -90,6 +90,7 @@ export function LiveSearchRow({ item, theme, layout }: PluginTimelineItemProps<L
       canceled={data.status === "canceled"}
       active={expanded}
       loading={running}
+      compact={layout.compact}
       expanded={expanded}
       onToggle={toggle}
       renderDetails={renderDetails}
